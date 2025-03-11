@@ -24,7 +24,16 @@ initialize_db <- function(db_name) {
       SS_13 REAL,
       SS_14 REAL,
       SS_15 REAL,
-      SS_16 REAL
+      SS_16 REAL,
+      SS_17 REAL,
+      SS_18 REAL,
+      SS_19 REAL,
+      SS_20 REAL,
+      SS_21 REAL,
+      SS_22 REAL,
+      SS_23 REAL,
+      SS_24 REAL,
+      SS_25 REAL
     )
   "))
   dbDisconnect(db) 

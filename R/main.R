@@ -7,6 +7,7 @@ suppressPackageStartupMessages({
   library(DBI)
   library(dplyr)
   library(ggplot2)
+  library(igraph)
   library(nosoi)
   library(parallel)
   library(purrr)

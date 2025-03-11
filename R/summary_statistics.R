@@ -69,11 +69,27 @@ compute_summary_statistics <- function(SimulationSingle) {
   SS_14 <- ifelse(nrow(result_td) <= 1, Data$total.time + 1, min(aggregate(inf_time_diff ~ inf.by, result_td, min)$inf_time_diff))
   SS_15 <- safe_median(result_td$inf_time_diff)
   SS_16 <- safe_var(result_td$inf_time_diff)
-  
+
+  SS_17 <- Data$total.time / 100  # Ratio of simulation run time to max time (hardcoded)
+
+  # Network Structure Analysis
+  edges <- All_Data_A[, c("inf.by", "hosts.ID")]
+  graph <- graph_from_data_frame(edges, directed = TRUE)
+
+  SS_18 <- safe_mean(degree(graph))  # Degree distribution
+  SS_19 <- safe_mean(transitivity(graph, type = "global"))  # Clustering coefficient
+  SS_20 <- safe_mean(edge_density(graph))  # Network density
+  SS_21 <- safe_mean(diameter(graph))  # Network diameter
+  SS_22 <- safe_mean(ego_size(graph))  # Mean neighborhood size
+  SS_23 <- safe_mean(radius(graph))  # Network radius
+  SS_24 <- safe_mean(alpha_centrality(graph))  # Network mean alpha centrality
+  SS_25 <- safe_mean(global_efficiency(graph))  # Network global efficiency
+
   # Return all summary statistics in a df
   summary_stats <- data.frame(
     SS_00, SS_01, SS_02, SS_03, SS_04, SS_05, SS_06, SS_07, SS_08, SS_09, SS_10,
-    SS_11, SS_12, SS_13, SS_14, SS_15, SS_16
+    SS_11, SS_12, SS_13, SS_14, SS_15, SS_16, SS_17, SS_18, SS_19, SS_20, SS_21,
+    SS_22, SS_23, SS_24, SS_25
   )
   
   return(summary_stats)
