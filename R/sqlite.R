@@ -92,3 +92,4 @@ export_db_to_csv <- function(db_name, path) {
   fwrite(df, path) 
   dbDisconnect(db) 
 }
+

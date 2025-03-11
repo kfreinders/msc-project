@@ -106,3 +106,4 @@ format_elapsed_time <- function(elapsed_time) {
     return(sprintf("%d days %.2f hr", days, hours))
   }
 }
+
