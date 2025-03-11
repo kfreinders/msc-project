@@ -41,7 +41,7 @@ param_bounds <- list(
 
 # Parallel processing and file names
 num_cores <- detectCores()
-output_folder <- "../data/nosoi/"
+output_folder <- "data/nosoi/"
 paramsets_file <- "master.csv"
 paramsets_plot_file <- "parameter_distributions.pdf"
 db_name <- "simulation_results.db"
