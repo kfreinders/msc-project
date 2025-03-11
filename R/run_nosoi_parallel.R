@@ -1,4 +1,21 @@
 #------------------------------------------------------------------------------#
+#    LOGGING MESSAGES                                                          #
+#------------------------------------------------------------------------------#
+
+print_log<- function(seed, hosts_infected, elapsed_time) {
+  # Determine formatting for Hosts Infected column
+  if (hosts_infected > 99999) {
+    host_str <- sprintf("%10.2e", hosts_infected)  # Scientific notation for large numbers
+  } else {
+    host_str <- sprintf("%10d", hosts_infected)   # Regular integer formatting
+  }
+  
+  # Print aligned output
+  cat(sprintf("FINISHED: seed %12d | Hosts Infected: %s | Duration: %6.2f sec\n", 
+              seed, host_str, elapsed_time))
+}
+
+#------------------------------------------------------------------------------#
 #    WORKER FACTORY                                                            #
 #------------------------------------------------------------------------------#
 
@@ -27,7 +44,7 @@ create_worker <- function(db_name, output_folder) {
         dbDisconnect(db)  # Close connection after writing
         
         # Logging
-        cat(sprintf("FINISHED: seed %d | Hosts Infected: %d | Duration: %.02f sec\n", seed, nrow(hosts_table), elapsed_time))
+        print_log(seed, nrow(hosts_table), elapsed_time)
         
         return(output_file)  # Return file names
       } else {
