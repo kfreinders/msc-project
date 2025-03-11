@@ -18,12 +18,12 @@ suppressPackageStartupMessages({
   library(viridisLite)
 })
 
-source("../R/sample_parameters.R")
-source("../R/nosoi_sim.R")
-source("../R/summary_statistics.R")
-source("../R/sqlite.R")
-source("../R/run_nosoi_parallel.R")
-source("../R/utils.R")
+source("R/sample_parameters.R")
+source("R/nosoi_sim.R")
+source("R/summary_statistics.R")
+source("R/sqlite.R")
+source("R/run_nosoi_parallel.R")
+source("R/utils.R")
 
 #------------------------------------------------------------------------------#
 #    CONFIGURATION                                                             #

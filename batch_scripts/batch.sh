@@ -8,4 +8,5 @@ echo -e '#                              NOSOI SIMULATIONS                       
 echo -e '#                          PARALLEL PROCESSING SCRIPT                          #'
 echo -e '################################################################################'
 
-Rscript ../R/main.R
+cd "$(dirname "$0")/.."  # Move to project root
+Rscript R/main.R
