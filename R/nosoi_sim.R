@@ -89,7 +89,6 @@ run_nosoi_simulation <- function(params) {
       param.pExit = param_pExit,
       
       # Closing parameters
-      prefix.host = "H", 
       print.progress = FALSE
     )
   )

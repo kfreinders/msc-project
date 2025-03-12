@@ -107,3 +107,32 @@ format_elapsed_time <- function(elapsed_time) {
   }
 }
 
+
+#------------------------------------------------------------------------------#
+#    COMPRESS NOSOI INFECTION TABLE                                            #
+#------------------------------------------------------------------------------#
+
+compress_infection_table <- function(df) {
+  # Sort the df by infection time
+  df <- df[order(df$inf.time), ]
+
+  # Convert inf.by: Remove "H-" and convert to integer, handling "NA-1" as NA
+  df$inf.by <- as.integer(sub("H-", "", df$inf.by))
+  df$inf.by[df$inf.by == -1] <- NA  # Handle patient zero
+
+  # Convert out.time: Replace "nan" with proper NA and convert to integer
+  df$out.time[df$out.time == "nan"] <- NA  
+  df$out.time <- as.integer(df$out.time)  
+
+  # Convert active to binary (0/1)
+  df$active <- as.integer(df$active)
+
+  # Replace inf.by with row indices (mapping hosts.ID to row number)
+  df$inf.by <- match(df$inf.by, df$hosts.ID)  # Faster than setNames() lookup
+
+  # Drop hosts.ID (no longer needed)
+  df$hosts.ID <- NULL
+
+  return(df)
+}
+

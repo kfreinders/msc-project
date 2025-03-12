@@ -3,6 +3,7 @@
 #------------------------------------------------------------------------------#
 
 suppressPackageStartupMessages({
+  library(arrow)
   library(data.table)
   library(DBI)
   library(dplyr)
@@ -56,6 +57,7 @@ paramsets_file <- paste(output_folder, "master.csv", sep = "")
 paramsets_plot_file <- paste(output_folder, "parameter_distributions.pdf", sep = "")
 db_name <- paste(output_folder, "simulation_results.db", sep = "")
 ss_filename <- paste(output_folder, "summary_stats_export.csv", sep = "")
+parquet_file <- paste(output_folder, "nosoi_inftables.parquet", sep = "")
 
 print_section("GENERATING PARAMETER DISTRIBUTIONS")
 
@@ -117,8 +119,8 @@ if (successful_runs > 0) {
   }
   
   cat("Total runtime:", formatted_time, "\n")
-  cat(sprintf("Full infection tables saved in: %s\n", output_folder))
-  cat(sprintf("Summary statistics exported to: %s\n\n", ss_filename))
+  cat(sprintf("Summary statistics exported to: %s\n", ss_filename))
+  cat(sprintf("Full infection tables saved to: %s\n\n", parquet_file))
 } else {
   cat("No valid results were generated\n\n")
 }

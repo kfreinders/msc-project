@@ -31,9 +31,10 @@ create_worker <- function(db_name, output_folder) {
       summary_statistics <- compute_summary_statistics(sim_result)
       
       if (!is.null(hosts_table) && nrow(hosts_table) > 0) {
-        # Save the infection table to a csv
-        output_file <- file.path(output_folder, paste0("nosoi_inftable_seed_", seed, ".csv"))
-        fwrite(hosts_table, output_file, append = TRUE, col.names = TRUE)
+        # Save the infection table to a Parquet file
+        output_file <- file.path(output_folder, paste0("inftable_", seed, ".parquet"))
+        hosts_table <- process_infection_table(hosts_table)
+        write_parquet(hosts_table, output_file)
         
         end_time <- Sys.time()  # End timing
         elapsed_time <- round(difftime(end_time, start_time, units = "secs"), 2)
