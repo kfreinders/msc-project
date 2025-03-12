@@ -90,19 +90,19 @@ plot_parameter_distributions <- function(df, path) {
 format_elapsed_time <- function(elapsed_time) {
   elapsed_secs <- as.numeric(elapsed_time)  # Convert difftime object to numeric (seconds)
   
-  if (elapsed_time < 60) {
-    return(sprintf("%.2f sec", elapsed_time))
-  } else if (elapsed_time < 3600) {  # Less than 1 hour
-    minutes <- floor(elapsed_time / 60)
-    seconds <- round(elapsed_time %% 60, 2)
+  if (elapsed_secs < 60) {
+    return(sprintf("%.2f sec", elapsed_secs))
+  } else if (elapsed_secs < 3600) {  # Less than 1 hour
+    minutes <- floor(elapsed_secs / 60)
+    seconds <- round(elapsed_secs %% 60, 2)
     return(sprintf("%d min %.2f sec", minutes, seconds))
-  } else if (elapsed_time < 86400) {  # Less than 24 hours
-    hours <- floor(elapsed_time / 3600)
-    minutes <- round((elapsed_time %% 3600) / 60, 2)
+  } else if (elapsed_secs < 86400) {  # Less than 24 hours
+    hours <- floor(elapsed_secs / 3600)
+    minutes <- round((elapsed_secs %% 3600) / 60, 2)
     return(sprintf("%d hr %.2f min", hours, minutes))
   } else {  # More than 24 hours
-    days <- floor(elapsed_time / 86400)
-    hours <- round((elapsed_time %% 86400) / 3600, 2)
+    days <- floor(elapsed_secs / 86400)
+    hours <- round((elapsed_secs %% 86400) / 3600, 2)
     return(sprintf("%d days %.2f hr", days, hours))
   }
 }
