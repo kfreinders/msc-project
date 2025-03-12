@@ -33,7 +33,7 @@ create_worker <- function(db_name, output_folder) {
       if (!is.null(hosts_table) && nrow(hosts_table) > 0) {
         # Save the infection table to a Parquet file
         output_file <- file.path(output_folder, paste0("inftable_", seed, ".parquet"))
-        hosts_table <- process_infection_table(hosts_table)
+        hosts_table <- compress_infection_table(hosts_table)
         write_parquet(hosts_table, output_file)
         
         end_time <- Sys.time()  # End timing
