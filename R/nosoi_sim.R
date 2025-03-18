@@ -71,9 +71,9 @@ run_nosoi_simulation <- function(params) {
   suppressMessages(
     simulation <-  nosoiSim(
       type = "single",        # Single-host system
-      length = 365,           # Simulation length in days
+      length = 100,           # Simulation length in days
       popStructure = "none",  # No population structure
-      max.infected = 10000,   # Maximum number of infected individuals
+      max.infected = 1000,   # Maximum number of infected individuals
       init.individuals = 1,   # Initial number of infected individuals
       
       # pTrans
