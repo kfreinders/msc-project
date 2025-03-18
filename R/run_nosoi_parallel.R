@@ -11,7 +11,7 @@ print_log<- function(seed, hosts_infected, elapsed_time) {
   }
   
   # Print aligned output
-  cat(sprintf("FINISHED: seed %12d | Hosts Infected: %s | Duration: %6.2f sec\n", 
+  cat(sprintf("FINISHED: seed %010d | Hosts Infected: %s | Duration: %6.2f sec\n", 
               seed, host_str, elapsed_time))
 }
 
@@ -32,9 +32,7 @@ create_worker <- function(db_name, output_folder) {
       
       if (!is.null(hosts_table) && nrow(hosts_table) > 0) {
         # Save the infection table to a Parquet file
-        output_file <- file.path(output_folder, paste0("inftable_", seed, ".parquet"))
-        hosts_table <- compress_infection_table(hosts_table)
-        write_parquet(hosts_table, output_file)
+        output_file <- save_inftable_compressed(hosts_table, output_folder, seed)
         
         end_time <- Sys.time()  # End timing
         elapsed_time <- round(difftime(end_time, start_time, units = "secs"), 2)

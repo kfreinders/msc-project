@@ -112,27 +112,86 @@ format_elapsed_time <- function(elapsed_time) {
 #    COMPRESS NOSOI INFECTION TABLE                                            #
 #------------------------------------------------------------------------------#
 
-compress_infection_table <- function(df) {
-  # Sort the df by infection time
-  df <- df[order(df$inf.time), ]
+reconstruct_hosts_ID <- function(df) {
+  # Ensure df is a data frame
+  df <- as.data.frame(df)
 
-  # Convert inf.by: Remove "H-" and convert to integer, handling "NA-1" as NA
-  df$inf.by <- as.integer(sub("H-", "", df$inf.by))
-  df$inf.by[df$inf.by == -1] <- NA  # Handle patient zero
+  # Create a new hosts.ID column based on row number
+  df$hosts.ID <- seq_len(nrow(df))
 
-  # Convert out.time: Replace "nan" with proper NA and convert to integer
-  df$out.time[df$out.time == "nan"] <- NA  
-  df$out.time <- as.integer(df$out.time)  
+  # Convert inf.by back to original host IDs
+  if ("inf.by" %in% names(df)) {
+    valid_indices <- !is.na(df$inf.by) & df$inf.by > 0 & df$inf.by <= nrow(df)
+    df$inf.by[valid_indices] <- df$hosts.ID[df$inf.by[valid_indices]]
+  }
 
-  # Convert active to binary (0/1)
-  df$active <- as.integer(df$active)
+  # Reconstruct 'active' column: 1 if out.time is NA, otherwise 0
+  if ("out.time" %in% names(df)) {
+    df$active <- as.integer(is.na(df$out.time))
+  }
 
-  # Replace inf.by with row indices (mapping hosts.ID to row number)
-  df$inf.by <- match(df$inf.by, df$hosts.ID)  # Faster than setNames() lookup
-
-  # Drop hosts.ID (no longer needed)
-  df$hosts.ID <- NULL
+  # Ensure the correct column order
+  correct_order <- c("hosts.ID", "inf.by", "inf.time", "out.time", "active", "tIncub")
+  existing_columns <- intersect(correct_order, names(df))  # Keep only existing columns
+  df <- df[, existing_columns, drop = FALSE]  # Reorder and drop unnecessary columns
 
   return(df)
+}
+
+sort_replace_datatypes <- function(df) {
+  # Sort by infection time
+  df <- df[order(df$inf.time), ]
+
+  # Convert hosts.ID: Remove "H-" and convert to integer
+  df$hosts.ID <- as.integer(sub("^H-", "", as.character(df$hosts.ID)))
+
+  # Convert inf.by: Remove "H-" and convert to integer, handling NA cases
+  df$inf.by <- sub("^H-", "", as.character(df$inf.by))  
+  df$inf.by <- suppressWarnings(as.integer(df$inf.by))
+  df$inf.by[is.na(df$inf.by)] <- 0  # Ensure patient zero is 0
+
+  # Convert out.time: Ensure proper NA replacement and integer conversion
+  df$out.time[df$out.time == "nan"] <- NA
+  df$out.time <- suppressWarnings(as.integer(df$out.time))
+
+  return(df)
+}
+
+# ------------------------------------------------------------------------------
+# INF.BY MAPPING EXPLANATION:
+# The `inf.by` column initially stores the host ID of the infector. By
+# replacing each entry with the row index of its corresponding infector, we
+# transform it into a parent-pointer structure. This fully encodes the graph
+# structure, allowing us to drop the `hosts.ID` column to reduce the file size.
+# ------------------------------------------------------------------------------
+  
+save_inftable_compressed <- function(df, output_folder, seed) {
+  # Sort the df and use more efficient data types
+  df <- sort_replace_datatypes(df)
+
+  formatted_seed <- sprintf("%010d", seed)
+
+  # Debugging: Also write original table.hosts as CSV
+  fwrite(df, file.path(output_folder, paste0("inftable_", formatted_seed, ".csv")))
+
+  # Apply mapping
+  df$inf.by <- match(df$inf.by, df$hosts.ID, nomatch = NA)  # Replace with row indices
+  
+  # Drop hosts.ID column after mapping, as we can reconstruct it
+  df$hosts.ID <- NULL  
+
+  # Hosts with no out.time (NA) are still active, therefore this column is
+  # redundant
+  df$active <- NULL  
+
+  # Save as Parquet
+  filename <- paste0("inftable_", formatted_seed, "_mapped.parquet")
+  write_parquet(df, file.path(output_folder, filename))
+
+  # Debugging: write as reconstructed CSV also
+  rec <- reconstruct_hosts_ID(df)
+  fwrite(rec, file.path(output_folder, paste0("inftable_", formatted_seed, "_rec.csv")))
+
+  return(file.path(output_folder, filename))
 }
 
