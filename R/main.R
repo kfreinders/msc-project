@@ -33,11 +33,12 @@ source("R/utils.R")
 # nosoi parameter bounds
 n_sim <- 1e1                    # Number of simulations to run
 param_bounds <- list(
-  mean_t_incub  = c(2, 21),     # Mean incubation time bounds
-  stdv_t_incub  = c(1, 4),      # Incubation time standard deviation bounds
-  mean_nContact = c(0.1, 5),    # Mean number of contacts bounds
-  p_trans       = c(0.01, 1),   # Transmission probability bounds
-  p_fatal       = c(0.01, 0.5)  # Fatality probability bounds
+  mean_t_incub  = c(2, 21),      # Mean incubation time bounds
+  stdv_t_incub  = c(1, 4),       # Incubation time standard deviation bounds
+  mean_nContact = c(0.1, 5),     # Mean number of contacts bounds
+  p_trans       = c(0.01, 1),    # Transmission probability bounds
+  p_fatal       = c(0.01, 0.5),  # Fatality probability bounds
+  t_recovery    = c(20, 20)      # Recovery time (fixed)
 )
 
 # Parallel processing and file names
