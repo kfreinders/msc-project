@@ -20,12 +20,24 @@ print_section <- function(s, termwidth = 80) {
 
 print_param_bounds <- function(param_bounds) {
   cat("Parameter sampling space:\n")
-  cat("----------------------------------\n")
+  cat("--------------------------------------------------\n")
+
+  # Find the longest parameter name for alignment
+  max_name_length <- max(nchar(names(param_bounds)))
+
   for (param in names(param_bounds)) {
     range <- param_bounds[[param]]
-    cat(sprintf(" %-14s : %6.3f - %6.3f\n", param, range[1], range[2]))
+
+    if (range[1] < range[2]) {
+      # Regular parameter with a range
+      cat(sprintf(" %-*s : %6.3f - %6.3f\n", max_name_length, param, range[1], range[2]))
+    } else {
+      # Fixed parameter
+      cat(sprintf(" %-*s : %6.3f\n", max_name_length, param, range[1]))
+    }
   }
-  cat("----------------------------------\n\n")
+
+  cat("--------------------------------------------------\n\n")
 }
 
 #------------------------------------------------------------------------------#
