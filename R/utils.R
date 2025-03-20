@@ -45,15 +45,27 @@ print_param_bounds <- function(param_bounds) {
 #------------------------------------------------------------------------------#
 
 plot_parameter_distributions <- function(df, path) {
-  # Convert data to long format for faceting
-  df_long <- df %>% select(-seed) %>%
+  # Remove 'seed' column and reshape the data to long format
+  df_long <- df %>%
+    select(-seed) %>%
     pivot_longer(cols = everything(), names_to = "Parameter", values_to = "Value")
-  
+
+  # Identify fixed parameters (those with a single unique value)
+  fixed_params <- df_long %>%
+    group_by(Parameter) %>%
+    summarize(unique_values = n_distinct(Value), .groups = "drop") %>%
+    filter(unique_values == 1) %>%
+    pull(Parameter)
+
+  # Filter out fixed parameters for plotting
+  df_plot <- df_long %>%
+    filter(!(Parameter %in% fixed_params))
+
   # Convert Parameter column to factor
   df_long$Parameter <- factor(df_long$Parameter, levels = c(
     "mean_t_incub", "stdv_t_incub", "mean_nContact", "p_trans", "p_fatal"
   ))
-  
+
   # Define proper expression labels
   parameter_labels <- as_labeller(c(
     mean_t_incub = "mu[incub]",
@@ -62,7 +74,16 @@ plot_parameter_distributions <- function(df, path) {
     p_trans = "italic(p)[trans]",
     p_fatal = "italic(p)[fatal]"
   ), label_parsed)
-  
+
+  # Print fixed parameters that were not plotted, if any
+  if (length(fixed_params) > 0) {
+    cat("Not plotting fixed parameters: ")
+    for (param in fixed_params) {
+      cat(sprintf("%s ", param))
+    }
+    cat("\n")
+  }
+
   # Define custom theme
   theme_pub <- theme_classic(base_size = 14) +  
     theme(
@@ -74,9 +95,9 @@ plot_parameter_distributions <- function(df, path) {
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank()
     )
-  
-  # Save a plot of the parameter distributions
-  plot_dist <- ggplot(df_long, aes(x = Value, fill = Parameter)) + 
+
+  # Plot only non-fixed parameters
+  plot_dist <- ggplot(df_plot, aes(x = Value, fill = Parameter)) + 
     geom_histogram(binwidth = function(x) diff(range(x)) / 40, 
                    alpha = 0.8, color = "black") +
     facet_wrap(~Parameter, scales = "free_x", labeller = parameter_labels, ncol = 2) +
@@ -87,8 +108,10 @@ plot_parameter_distributions <- function(df, path) {
       y = "Count"
     ) +
     theme_pub
+
+  # Save the plot
   ggsave(path, plot = plot_dist, width = 8, height = 6)
-  
+
   # Ensure plot was written successfully
   if (!file.exists(path)) {
     stop("Error: Parameter distribution plot was not created successfully.")
@@ -118,7 +141,6 @@ format_elapsed_time <- function(elapsed_time) {
     return(sprintf("%d days %.2f hr", days, hours))
   }
 }
-
 
 #------------------------------------------------------------------------------#
 #    COMPRESS NOSOI INFECTION TABLE                                            #
