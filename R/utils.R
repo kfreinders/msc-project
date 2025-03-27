@@ -146,6 +146,27 @@ format_elapsed_time <- function(elapsed_time) {
 #    COMPRESS NOSOI INFECTION TABLE                                            #
 #------------------------------------------------------------------------------#
 
+# Function to determine fate post-simulation
+# Mapping:
+#   0 -> still active
+#   1 -> deceased
+#   2 -> recovered
+
+determine_fate <- function(df, p_fatal) {
+  df$fate <- NA  # Initialize fate column
+
+  # Condition for recovered individuals
+  df$fate[df$out.time >= df$inf.time + df$tIncub + 20] <- 2
+
+  # Condition for deceased individuals
+  df$fate[df$out.time < df$inf.time + df$tIncub + 20 & !is.na(df$out.time)] <- 1
+
+  # Individuals still active at the end of the simulation
+  df$fate[is.na(df$out.time)] <- 0
+
+  return(df)
+}
+
 reconstruct_hosts_ID <- function(df) {
   # Ensure df is a data frame
   df <- as.data.frame(df)
