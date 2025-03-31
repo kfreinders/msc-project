@@ -13,7 +13,6 @@ print_section <- function(s, termwidth = 80) {
   # Print the output
   cat(full, "\n")
 }
-
 #------------------------------------------------------------------------------#
 #    PRINT PARAMATER BOUNDS TABLE                                              #
 #------------------------------------------------------------------------------#
@@ -139,6 +138,28 @@ format_elapsed_time <- function(elapsed_time) {
     days <- floor(elapsed_secs / 86400)
     hours <- round((elapsed_secs %% 86400) / 3600, 2)
     return(sprintf("%d days %.2f hr", days, hours))
+  }
+}
+
+#------------------------------------------------------------------------------#
+#    POST-SIMULATION SUMMARY                                                   #
+#------------------------------------------------------------------------------#
+
+print_run_summary <- function(successful_runs, n_sim, db_name, ss_filename, parquet_file) {
+  if (successful_runs > 0) {
+    export_db_to_csv(db_name, ss_filename)
+
+    if (successful_runs == n_sim) {
+      cat("All simulations completed successfully\n")
+    } else {
+      cat(sprintf("Simulations successful: %d\n", successful_runs))
+      cat(sprintf("Simulations failed: %d\n", n_sim - successful_runs))
+    }
+
+    cat(sprintf("Summary statistics exported to: %s\n", ss_filename))
+    cat(sprintf("Full infection tables saved to: %s\n\n", parquet_file))
+  } else {
+    cat("No valid results were generated\n\n")
   }
 }
 

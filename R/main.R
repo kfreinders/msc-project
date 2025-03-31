@@ -100,22 +100,5 @@ print_section("SUMMARY")
 valid_files <- output_files[!sapply(output_files, is.null)]
 successful_runs <- length(valid_files)
 
-if (successful_runs > 0) {
-  # Export summary statistics if at least one simulation was successful
-  export_db_to_csv(db_name, ss_filename)
-  
-  # Check if any simulations failed and print batch statistics
-  if (successful_runs == n_sim) {
-    cat("All simulations completed successfully\n")
-  } else {
-    cat(sprintf("Simulations successful: %d\n", successful_runs))
-    cat(sprintf("Simulations failed: %d\n", n_sim - successful_runs))
-  }
-  
-  cat("Total runtime:", formatted_time, "\n")
-  cat(sprintf("Summary statistics exported to: %s\n", ss_filename))
-  cat(sprintf("Full infection tables saved to: %s\n\n", parquet_file))
-} else {
-  cat("No valid results were generated\n\n")
-}
+print_run_summary(successful_runs, n_sim, db_name, ss_filename, parquet_file)
 
