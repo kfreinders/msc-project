@@ -59,22 +59,9 @@ db_name <- paste(output_folder, "simulation_results.db", sep = "")
 ss_filename <- paste(output_folder, "summary_stats_export.csv", sep = "")
 parquet_file <- paste(output_folder, "nosoi_inftables.parquet", sep = "")
 
-print_section("GENERATING PARAMETER DISTRIBUTIONS")
-
-# Sample parameter sets
-print_param_bounds(param_bounds)
-df <- generate_parameters(n_sim, param_bounds)
-validate_parameters(df, param_bounds)
-cat(sprintf("Successfully generated %d unique parameter sets\n", n_sim))
-
-# Save the parameter sets to a CSV
-if (!dir.exists(output_folder)) dir.create(output_folder, recursive = TRUE)
-write.csv(df, paramsets_file, row.names = FALSE)
-cat(sprintf("Saved parameter sets to '%s'\n", paramsets_file))
-
-# Save a plot of the parameter sampling
-plot_parameter_distributions(df, paramsets_plot_file)
-cat(sprintf("Saved plot of parameter sets distribution to '%s'\n", paramsets_plot_file))
+df <- resume_or_generate_parameters(
+  n_sim, param_bounds, output_folder, paramsets_file, paramsets_plot_file
+)
 
 #------------------------------------------------------------------------------#
 #    RUN SIMULATIONS IN PARALLEL                                               #

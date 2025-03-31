@@ -99,3 +99,43 @@ validate_parameters <- function(df, param_bounds) {
   }
 }
 
+#------------------------------------------------------------------------------#
+#    RESUMING PRODUCTION RUNS                                                  #
+#------------------------------------------------------------------------------#
+
+resume_or_generate_parameters <- function(n_sim, param_bounds, output_folder, paramsets_file, plot_file) {
+  if (file.exists(paramsets_file)) {
+    cat(sprintf("Existing master file found at '%s'\n", paramsets_file))
+    df <- fread(paramsets_file)
+
+    existing_files <- list.files(output_folder, pattern = "^inftable_\\d{10}_mapped\\.parquet$")
+    completed_seeds <- as.integer(substr(existing_files, 10, 19))
+    df <- df[!(df$seed %in% completed_seeds), ]
+
+    cat(sprintf("Resuming run with %d remaining simulations\n", nrow(df)))
+
+    if (nrow(df) == 0) {
+      cat("All simulations already completed. Nothing to do.\n")
+      quit(save = "no")
+    }
+
+    return(df)
+  }
+
+  print_section("GENERATING PARAMETER DISTRIBUTIONS")
+  print_param_bounds(param_bounds)
+
+  df <- generate_parameters(n_sim, param_bounds)
+  validate_parameters(df, param_bounds)
+  cat(sprintf("Successfully generated %d unique parameter sets\n", n_sim))
+
+  if (!dir.exists(output_folder)) dir.create(output_folder, recursive = TRUE)
+  write.csv(df, paramsets_file, row.names = FALSE)
+  cat(sprintf("Saved parameter sets to '%s'\n", paramsets_file))
+
+  plot_parameter_distributions(df, plot_file)
+  cat(sprintf("Saved plot of parameter sets distribution to '%s'\n", plot_file))
+
+  return(df)
+}
+
