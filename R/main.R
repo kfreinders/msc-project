@@ -31,7 +31,7 @@ source("R/utils.R")
 #------------------------------------------------------------------------------#
 
 # nosoi parameter bounds
-n_sim <- 1e1                    # Number of simulations to run
+n_sim <- 15e4                    # Number of simulations to run
 param_bounds <- list(
   mean_t_incub  = c(2, 21),      # Mean incubation time bounds
   stdv_t_incub  = c(1, 4),       # Incubation time standard deviation bounds
