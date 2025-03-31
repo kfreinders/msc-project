@@ -9,23 +9,39 @@ generate_parameters <- function(amount, param_bounds) {
   }
 
   validate_bounds(param_bounds)
-  
-  # Sample parameters from uniform distributions
-  df <- as.data.frame(
-    map(param_bounds, function(bounds) {
-      if (bounds[1] != bounds[2]) {
-        # If the bounds differ, sample in that range
-        runif(amount, bounds[1], bounds[2])
-      } else {
-        # If both bounds are the same, return a constant vector
-        rep(bounds[1], amount)
-      }
-    })
-  )
-  
+
+  # Identify variable and fixed parameters
+  is_fixed <- map_lgl(param_bounds, ~ .x[1] == .x[2])
+  variable_bounds <- param_bounds[!is_fixed]
+  fixed_values <- map(param_bounds[is_fixed], ~ rep(.x[1], amount))
+
+  # Latin Hypercube Sampling for variable parameters
+  if (length(variable_bounds) > 0) {
+    num_vars <- length(variable_bounds)
+    lhs_matrix <- randomLHS(amount, num_vars)
+
+    # Scale each column to its corresponding bounds
+    scaled_vars <- map2_dfc(
+      as.data.frame(lhs_matrix),
+      variable_bounds,
+      ~ .x * diff(.y) + .y[1]
+    )
+
+    names(scaled_vars) <- names(variable_bounds)
+  } else {
+    scaled_vars <- data.frame()
+  }
+
+  # Combine with fixed parameters
+  df_fixed <- as.data.frame(fixed_values)
+  df <- cbind(scaled_vars, df_fixed)
+
+  # Ensure original parameter order is preserved
+  df <- df[names(param_bounds)]
+
   # Add unique seed column
   df <- cbind(seed = sample(.Machine$integer.max, amount, replace = FALSE), df)
-  
+
   return(df)
 }
 
