@@ -41,8 +41,6 @@ param_bounds <- list(
   t_recovery    = c(20, 20)      # Recovery time (fixed)
 )
 
-# Parallel processing and file names
-num_cores <- detectCores()
 output_folder <- "data/nosoi/"
 paramsets_file <- "master.csv"
 paramsets_plot_file <- "parameter_distributions.pdf"
@@ -86,6 +84,13 @@ print_section("RUNNING NOSOI SIMULATIONS")
 # Create a table in an SQLite database to store generated summary statistics
 initialize_db(db_name)
 cat("SQLite database connection successfully established\n")
+
+# Get the number of available cores
+num_cores <- if (Sys.getenv("SLURM_CPUS_ON_NODE") != "") {
+  as.numeric(Sys.getenv("SLURM_CPUS_ON_NODE"))  # Running as a SLURM job
+} else {
+  detectCores() - 1  # When running locally, leave one core for stability
+}
 
 # Start and time the simulations
 cat(sprintf("Running simulations on %d cores with dynamic task allocation...\n\n", num_cores))
