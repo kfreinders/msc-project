@@ -227,7 +227,7 @@ save_inftable_compressed <- function(df, output_folder, seed) {
   formatted_seed <- sprintf("%010d", seed)
 
   # Debugging: Also write original table.hosts as CSV
-  fwrite(df, file.path(output_folder, paste0("inftable_", formatted_seed, ".csv")))
+  # fwrite(df, file.path(output_folder, paste0("inftable_", formatted_seed, ".csv")))
 
   # Apply mapping
   df$inf.by <- match(df$inf.by, df$hosts.ID, nomatch = NA)  # Replace with row indices
@@ -244,8 +244,8 @@ save_inftable_compressed <- function(df, output_folder, seed) {
   write_parquet(df, file.path(output_folder, filename))
 
   # Debugging: write as reconstructed CSV also
-  rec <- reconstruct_hosts_ID(df)
-  fwrite(rec, file.path(output_folder, paste0("inftable_", formatted_seed, "_rec.csv")))
+  # rec <- reconstruct_hosts_ID(df)
+  # fwrite(rec, file.path(output_folder, paste0("inftable_", formatted_seed, "_rec.csv")))
 
   return(file.path(output_folder, filename))
 }
