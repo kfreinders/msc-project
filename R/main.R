@@ -20,6 +20,7 @@ suppressPackageStartupMessages({
   library(viridisLite)
 })
 
+source("R/config.R")
 source("R/sample_parameters.R")
 source("R/nosoi_sim.R")
 source("R/summary_statistics.R")
@@ -28,36 +29,8 @@ source("R/run_nosoi_parallel.R")
 source("R/utils.R")
 
 #------------------------------------------------------------------------------#
-#    CONFIGURATION                                                             #
-#------------------------------------------------------------------------------#
-
-# nosoi parameter bounds
-n_sim <- 15e4                    # Number of simulations to run
-param_bounds <- list(
-  mean_t_incub  = c(2, 21),      # Mean incubation time bounds
-  stdv_t_incub  = c(1, 4),       # Incubation time standard deviation bounds
-  mean_nContact = c(0.1, 5),     # Mean number of contacts bounds
-  p_trans       = c(0.01, 1),    # Transmission probability bounds
-  p_fatal       = c(0.01, 0.5),  # Fatality probability bounds
-  t_recovery    = c(20, 20)      # Recovery time (fixed)
-)
-
-output_folder <- "data/nosoi/"
-paramsets_file <- "master.csv"
-paramsets_plot_file <- "parameter_distributions.pdf"
-db_name <- "simulation_results.db"
-ss_filename <- "summary_stats_export.csv"
-
-#------------------------------------------------------------------------------#
 #    SAMPLE PARAMETER SPACE                                                    #
 #------------------------------------------------------------------------------#
-
-# Set file save location to output_folder
-paramsets_file <- paste(output_folder, "master.csv", sep = "")
-paramsets_plot_file <- paste(output_folder, "parameter_distributions.pdf", sep = "")
-db_name <- paste(output_folder, "simulation_results.db", sep = "")
-ss_filename <- paste(output_folder, "summary_stats_export.csv", sep = "")
-parquet_file <- paste(output_folder, "nosoi_inftables.parquet", sep = "")
 
 df <- resume_or_generate_parameters(
   n_sim, param_bounds, output_folder, paramsets_file, paramsets_plot_file
