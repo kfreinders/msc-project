@@ -44,6 +44,10 @@ create_worker <- function(db_name, output_folder) {
         
         # Logging
         print_log(seed, nrow(hosts_table), elapsed_time)
+
+        # Explicitly clear memory
+        rm(sim_result, hosts_table)
+        gc()
         
         return(output_file)  # Return file names
       } else {
@@ -70,8 +74,9 @@ run_nosoi_parallel <- function(input_file, db_name, output_folder, num_cores) {
   worker <- create_worker(db_name, output_folder)
   
   # Run in parallel
-  output_files <- mcmapply(worker, params_list,
-                           mc.cores = num_cores, mc.preschedule = FALSE)
+  output_files <- mclapply(
+    params_list, worker, mc.cores = num_cores, mc.preschedule = FALSE
+  )
   
   return(output_files)
 }

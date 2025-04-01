@@ -3,7 +3,7 @@
 #SBATCH --time=02-00:00:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=12
-#SBATCH --mem=4GB
+#SBATCH --mem=20GB
 #SBATCH --output=nosoi_parallel_%j.out
 #SBATCH --error=nosoi_parallel_%j.err
 
