@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=nosoi_parallel
-#SBATCH --time=02:00:00:00
+#SBATCH --time=02-00:00:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=12
 #SBATCH --mem=4GB
@@ -12,8 +12,9 @@ echo -e '#                              NOSOI SIMULATIONS                       
 echo -e '#                          PARALLEL PROCESSING SCRIPT                          #'
 echo -e '################################################################################'
 
-cd "$(dirname "$0")/.."  # Move to project root
-echo "Working directory: $(pwd)"
+# Move to project root
+cd /home4/s3919323/msc-project
+echo -e "\nWorking directory: $(pwd)"
 
 # Purge all modules and load R
 module purge
