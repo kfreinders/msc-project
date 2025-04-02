@@ -57,7 +57,7 @@ num_cores <- if (Sys.getenv("SLURM_CPUS_ON_NODE") != "") {
 cat(sprintf("Running simulations on %d cores with dynamic task allocation...\n\n", num_cores))
 start_time <- Sys.time()  # Start timing
 output_files <- run_nosoi_parallel(
-  paramsets_file, db_name, output_folder, num_cores, nosoi_settings
+  df, db_name, output_folder, num_cores, nosoi_settings
 )
 end_time <- Sys.time()  # End timing
 

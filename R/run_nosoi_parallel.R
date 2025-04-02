@@ -66,19 +66,17 @@ create_worker <- function(db_name, output_folder, nosoi_settings) {
 #------------------------------------------------------------------------------#
 
 run_nosoi_parallel <- function(
-  input_file, db_name, output_folder, num_cores, nosoi_settings
+  param_df, db_name, output_folder, num_cores, nosoi_settings
 ) {
-  # Load parameter sets
-  df <- fread(input_file)
-  params_list <- split(df, seq(nrow(df)))
-  
-  # Create worker with access to db_name and output_folder
+  # Create worker
+  params_list <- split(param_df, seq(nrow(param_df)))
   worker <- create_worker(db_name, output_folder, nosoi_settings)
   
-  # Run in parallel
+  # Run simulations in parallel
   output_files <- mclapply(
     params_list, worker, mc.cores = num_cores, mc.preschedule = FALSE
   )
   
   return(output_files)
 }
+
