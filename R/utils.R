@@ -71,7 +71,8 @@ plot_parameter_distributions <- function(df, path) {
     stdv_t_incub = "sigma[incub]",
     mean_nContact = "italic(n)[contact]",
     p_trans = "italic(p)[trans]",
-    p_fatal = "italic(p)[fatal]"
+    p_fatal = "italic(p)[fatal]",
+    t_recovery = "t[recovery]"
   ), label_parsed)
 
   # Print fixed parameters that were not plotted, if any

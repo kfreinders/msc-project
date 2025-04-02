@@ -21,9 +21,8 @@ create_pTransFunc <- function(p_trans) {
 }
 
 # Function factory: exit probability (death / recovery)
-create_pExitFunc <- function(p_fatal) {
+create_pExitFunc <- function(p_fatal, t_recovery) {
   function(t, tIncub) {
-    t_recovery <- 20  # Days before recovery
     if (t <= tIncub) {
       return(0)
     } else if ((t > tIncub) & (t < (tIncub + t_recovery))) {
@@ -52,13 +51,14 @@ run_nosoi_simulation <- function(params) {
   mean_nContact <- as.numeric(params$mean_nContact)
   p_trans       <- as.numeric(params$p_trans)
   p_fatal       <- as.numeric(params$p_fatal)
+  t_recovery    <- as.numeric(params$t_recovery)
   seed          <- as.numeric(params$seed)
   
   # Create core functions
   tIncubFunc <- create_tIncubFunc(mean_tIncub, stdv_tIncub)
   pTransFunc <- create_pTransFunc(p_trans)
   nContactFunc <- create_nContactFunc(mean_nContact)
-  pExitFunc <- create_pExitFunc(p_fatal)
+  pExitFunc <- create_pExitFunc(p_fatal, t_recovery)
   
   # Parameter lists
   param_pTrans <- list(tIncub = tIncubFunc)

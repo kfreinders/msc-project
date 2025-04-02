@@ -33,8 +33,12 @@ generate_parameters <- function(amount, param_bounds) {
   }
 
   # Combine with fixed parameters
-  df_fixed <- as.data.frame(fixed_values)
-  df <- cbind(scaled_vars, df_fixed)
+  df_fixed <- if (length(fixed_values) > 0) {
+    as.data.frame(fixed_values)
+  } else {
+    data.frame(row.names = seq_len(amount))  # empty df with correct row count
+  }
+    df <- cbind(scaled_vars, df_fixed)
 
   # Ensure original parameter order is preserved
   df <- df[names(param_bounds)]
