@@ -33,7 +33,7 @@ source("R/utils.R")
 #------------------------------------------------------------------------------#
 
 df <- resume_or_generate_parameters(
-  n_sim, param_bounds, output_folder, paramsets_file, paramsets_plot_file
+  nosoi_settings$n_sim, param_bounds, output_folder, paramsets_file, paramsets_plot_file
 )
 
 #------------------------------------------------------------------------------#
@@ -56,7 +56,9 @@ num_cores <- if (Sys.getenv("SLURM_CPUS_ON_NODE") != "") {
 # Start and time the simulations
 cat(sprintf("Running simulations on %d cores with dynamic task allocation...\n\n", num_cores))
 start_time <- Sys.time()  # Start timing
-output_files <- run_nosoi_parallel(paramsets_file, db_name, output_folder, num_cores)
+output_files <- run_nosoi_parallel(
+  paramsets_file, db_name, output_folder, num_cores, nosoi_settings
+)
 end_time <- Sys.time()  # End timing
 
 # Compute and format total elapsed time in seconds
@@ -73,5 +75,7 @@ print_section("SUMMARY")
 valid_files <- output_files[!sapply(output_files, is.null)]
 successful_runs <- length(valid_files)
 
-print_run_summary(successful_runs, n_sim, db_name, ss_filename, parquet_file)
+print_run_summary(
+  successful_runs, nosoi_settings$n_sim, db_name, ss_filename, parquet_file
+)
 

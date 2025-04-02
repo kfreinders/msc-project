@@ -18,7 +18,7 @@ safe_var <- function(x, default = 0) {
 # Compute Summary Statistics                                                   #
 #------------------------------------------------------------------------------#
 
-compute_summary_statistics <- function(SimulationSingle) {
+compute_summary_statistics <- function(SimulationSingle, nosoi_settings) {
   Data <- SimulationSingle
   Data_A <- getTableHosts(Data)
   All_Data_A <- Data_A
@@ -70,7 +70,7 @@ compute_summary_statistics <- function(SimulationSingle) {
   SS_15 <- safe_median(result_td$inf_time_diff)
   SS_16 <- safe_var(result_td$inf_time_diff)
 
-  SS_17 <- Data$total.time / 100  # Ratio of simulation run time to max time (hardcoded)
+  SS_17 <- Data$total.time / nosoi_settings$length  # Ratio of simulation run time to max time
 
   # Network Structure Analysis
   edges <- All_Data_A[, c("inf.by", "hosts.ID")]

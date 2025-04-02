@@ -44,15 +44,20 @@ create_nContactFunc <- function(mean_nContact) {
 #    SIMULATION LOGIC                                                          #
 #------------------------------------------------------------------------------#
 
-run_nosoi_simulation <- function(params) {
+run_nosoi_simulation <- function(param_bounds, nosoi_settings) {
   # Convert parameters to numeric to avoid issues
-  mean_tIncub   <- as.numeric(params$mean_t_incub)
-  stdv_tIncub   <- as.numeric(params$stdv_t_incub)
-  mean_nContact <- as.numeric(params$mean_nContact)
-  p_trans       <- as.numeric(params$p_trans)
-  p_fatal       <- as.numeric(params$p_fatal)
-  t_recovery    <- as.numeric(params$t_recovery)
-  seed          <- as.numeric(params$seed)
+  mean_tIncub   <- as.numeric(param_bounds$mean_t_incub)
+  stdv_tIncub   <- as.numeric(param_bounds$stdv_t_incub)
+  mean_nContact <- as.numeric(param_bounds$mean_nContact)
+  p_trans       <- as.numeric(param_bounds$p_trans)
+  p_fatal       <- as.numeric(param_bounds$p_fatal)
+  t_recovery    <- as.numeric(param_bounds$t_recovery)
+  seed          <- as.numeric(param_bounds$seed)
+
+  # Do the same for the nosoi simulation settings
+  length            <- as.numeric(nosoi_settings$length)
+  max_infected      <- as.numeric(nosoi_settings$max_infected)
+  init_individuals  <- as.numeric(nosoi_settings$init_individuals)
   
   # Create core functions
   tIncubFunc <- create_tIncubFunc(mean_tIncub, stdv_tIncub)
@@ -70,11 +75,11 @@ run_nosoi_simulation <- function(params) {
   # Start the simulation
   suppressMessages(
     simulation <-  nosoiSim(
-      type = "single",        # Single-host system
-      length = 100,           # Simulation length in days
-      popStructure = "none",  # No population structure
-      max.infected = 10000,   # Maximum number of infected individuals
-      init.individuals = 1,   # Initial number of infected individuals
+      type = "single",                      # Single-host system
+      length = length,                      # Simulation length in days
+      popStructure = "none",                # No population structure
+      max.infected = max_infected,          # Maximum number of infected individuals
+      init.individuals = init_individuals,  # Initial number of infected individuals
       
       # pTrans
       pTrans = pTransFunc,

@@ -19,16 +19,16 @@ print_log<- function(seed, hosts_infected, elapsed_time) {
 #    WORKER FACTORY                                                            #
 #------------------------------------------------------------------------------#
 
-create_worker <- function(db_name, output_folder) {
+create_worker <- function(db_name, output_folder, nosoi_settings) {
   function(params) {
     tryCatch({
       seed <- params$seed
       start_time <- Sys.time()  # Start timing
       
       # Run the simulation
-      sim_result <- run_nosoi_simulation(params)
+      sim_result <- run_nosoi_simulation(params, nosoi_settings)
       hosts_table <- getTableHosts(sim_result)
-      summary_statistics <- compute_summary_statistics(sim_result)
+      summary_statistics <- compute_summary_statistics(sim_result, nosoi_settings)
       
       if (!is.null(hosts_table) && nrow(hosts_table) > 0) {
         # Save the infection table to a Parquet file
@@ -65,13 +65,15 @@ create_worker <- function(db_name, output_folder) {
 #    PARALLELIZATION                                                           #
 #------------------------------------------------------------------------------#
 
-run_nosoi_parallel <- function(input_file, db_name, output_folder, num_cores) {
+run_nosoi_parallel <- function(
+  input_file, db_name, output_folder, num_cores, nosoi_settings
+) {
   # Load parameter sets
   df <- fread(input_file)
   params_list <- split(df, seq(nrow(df)))
   
   # Create worker with access to db_name and output_folder
-  worker <- create_worker(db_name, output_folder)
+  worker <- create_worker(db_name, output_folder, nosoi_settings)
   
   # Run in parallel
   output_files <- mclapply(

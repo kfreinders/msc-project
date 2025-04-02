@@ -1,4 +1,10 @@
-n_sim <- 15e4
+nosoi_settings <- list(
+  n_sim = 15e4,           # Number of simulations to run
+  length = 100,           # Simulation length in days
+  max_infected = 10000,   # Maximum number of infected individuals
+  init_individuals = 1    # Initial number of infected individuals
+)
+
 param_bounds <- list(
   mean_t_incub  = c(2, 21),
   stdv_t_incub  = c(1, 4),
