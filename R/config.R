@@ -14,7 +14,7 @@ param_bounds <- list(
   t_recovery    = c(10, 30)
 )
 
-output_folder         <- "data/nosoi/"
+output_folder         <- "data/nosoi"
 paramsets_file        <- file.path(output_folder, "master.csv")
 paramsets_plot_file   <- file.path(output_folder, "parameter_distributions.pdf")
 db_name               <- file.path(output_folder, "simulation_results.db")
