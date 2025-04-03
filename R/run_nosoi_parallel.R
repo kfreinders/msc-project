@@ -49,14 +49,11 @@ create_worker <- function(db_name, output_folder, nosoi_settings) {
         rm(sim_result, hosts_table)
         gc()
         
-        return(output_file)  # Return file names
       } else {
         message("WARNING: seed ", seed, " finished but no infections recorded.")
-        return(NULL)
       }
     }, error = function(e) {
       message("ERROR: seed ", params$seed, " failed. Cause: ", e$message)
-      return(NULL)
     })
   }
 }
@@ -72,11 +69,11 @@ run_nosoi_parallel <- function(
   params_list <- split(param_df, seq(nrow(param_df)))
   worker <- create_worker(db_name, output_folder, nosoi_settings)
   
-  # Run simulations in parallel
-  output_files <- mclapply(
+  # Run simulations in parallel.
+  mc_stats <- mclapply(
     params_list, worker, mc.cores = num_cores, mc.preschedule = FALSE
   )
-  
-  return(output_files)
+
+  return(mc_stats)
 }
 
