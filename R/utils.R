@@ -146,22 +146,107 @@ format_elapsed_time <- function(elapsed_time) {
 #    POST-SIMULATION SUMMARY                                                   #
 #------------------------------------------------------------------------------#
 
-print_run_summary <- function(successful_runs, n_sim, db_name, ss_filename, parquet_file) {
-  if (successful_runs > 0) {
-    export_db_to_csv(db_name, ss_filename)
+print_mclapply_stats <- function(mc_stats) {
+  # Extract first element if mc_stats is a list
+  stats <- mc_stats[[1]]
 
-    if (successful_runs == n_sim) {
-      cat("All simulations completed successfully\n")
-    } else {
-      cat(sprintf("Simulations successful: %d\n", successful_runs))
-      cat(sprintf("Simulations failed: %d\n", n_sim - successful_runs))
-    }
-
-    cat(sprintf("Summary statistics exported to: %s\n", ss_filename))
-    cat(sprintf("Full infection tables saved to: %s\n\n", parquet_file))
-  } else {
-    cat("No valid results were generated\n\n")
+  # Format and print each row manually
+  cat("Memory usage (mclapply stats):\n")
+  for (i in seq_len(nrow(stats))) {
+    row_name <- rownames(stats)[i]
+    values <- format(stats[i, ], digits = 3, justify = "right")
+    cat(sprintf("  %-7s %10s %6s %11s %6s %9s %6s\n",
+                row_name,
+                values["used"], "(Mb)",
+                values["gc trigger"], "(Mb)",
+                values["max used"], "(Mb)"))
   }
+  cat("\n")
+}
+
+print_run_summary <- function(
+  df_remaining, paramsets_file, ss_filename, output_folder, mc_stats, elapsed_time
+) {
+  print_section("SUMMARY")
+
+  # Load all seeds from master
+  df_all <- fread(paramsets_file)
+  all_seeds <- unique(df_all$seed)
+  n_total <- length(all_seeds)
+
+  # Determine whether we resumed a run
+  resumed <- nrow(df_remaining) < n_total
+  seeds_remaining <- df_remaining$seed
+
+  # Find all parquet output files and parse seeds
+  parquet_files <- list.files(
+    path = output_folder,
+    pattern = "^inftable_\\d+_mapped\\.parquet$",
+    full.names = TRUE
+  )
+
+  # Validate file existence and parse seed numbers
+  existing_files <- parquet_files[file.exists(parquet_files)]
+  seeds_in_files <- as.integer(gsub(".*inftable_(\\d+)_mapped\\.parquet$", "\\1", existing_files))
+  seeds_in_files <- unique(seeds_in_files)
+  n_completed <- length(seeds_in_files)
+
+  # Compare seed sets
+  seeds_missing <- setdiff(all_seeds, seeds_in_files)
+  seeds_unexpected <- setdiff(seeds_in_files, all_seeds)
+  has_duplicates <- any(duplicated(seeds_in_files))
+
+  # Print general progress
+  if (n_completed == 0) {
+    cat("No valid results were generated\n\n")
+    return()
+  }
+
+  # Print parallel processing stats
+  print_mclapply_stats(mc_stats)
+
+  # Print no. completed simulations if we've resumed a run
+  if (resumed) {
+    completed_this_session <- n_completed - (n_total - nrow(df_remaining))
+    cat(sprintf(
+      "Resumed run: %d simulations completed in this session\n",
+      completed_this_session
+    ))
+  }
+
+  # Print total no. completed simulations
+  cat(sprintf(
+    "Total completed simulations: %d / %d (%.2f%%)\n",
+    n_completed, n_total, 100 * n_completed / n_total
+  ))
+
+  # Print current run and total runtime
+  cat(sprintf("Runtime: %s\n", format_elapsed_time(elapsed_time)))
+
+  # File integrity diagnostics
+  if (length(seeds_missing) > 0) {
+    cat(sprintf("%d expected output files are missing\n", length(seeds_missing)))
+    cat("Missing seeds: ", paste(head(seeds_missing, 5), collapse = ", "))
+    if (length(seeds_missing) > 5) cat(" ... (truncated)\n")
+  }
+
+  if (length(seeds_unexpected) > 0) {
+    cat(sprintf(
+      "%d unexpected seed files found. %s should be clean when starting a new run\n",
+      length(seeds_unexpected), output_folder
+    ))
+    cat("Unexpected seeds:", paste(head(seeds_unexpected, 5), collapse = ", "))
+    if (length(seeds_unexpected) > 5) cat(" ... (truncated)\n")
+    cat("\n")
+  }
+
+  if (has_duplicates) {
+    cat("Duplicate seed files found in output\n")
+  }
+
+  # Final note
+  cat(sprintf("\nSummary statistics exported to: %s\n", ss_filename))
+  cat(sprintf("Full infection tables saved to: %s\n\n", output_folder))
 }
 
 #------------------------------------------------------------------------------#

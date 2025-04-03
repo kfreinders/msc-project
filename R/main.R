@@ -32,6 +32,10 @@ source("R/utils.R")
 #    SAMPLE PARAMETER SPACE                                                    #
 #------------------------------------------------------------------------------#
 
+# Time current process
+start_time <- Sys.time()
+
+# Get full parameter sets to simulate or remaining parameter sets when resuming
 df <- resume_or_generate_parameters(
   nosoi_settings$n_sim, param_bounds, output_folder, paramsets_file, paramsets_plot_file
 )
@@ -54,28 +58,25 @@ num_cores <- if (Sys.getenv("SLURM_CPUS_ON_NODE") != "") {
 }
 
 # Start and time the simulations
-cat(sprintf("Running simulations on %d cores with dynamic task allocation...\n\n", num_cores))
-start_time <- Sys.time()  # Start timing
-output_files <- run_nosoi_parallel(
+cat(sprintf(
+  "Running simulations on %d cores with dynamic task allocation...\n\n",
+  num_cores
+))
+mc_stats <- run_nosoi_parallel(
   df, db_name, output_folder, num_cores, nosoi_settings
 )
-end_time <- Sys.time()  # End timing
 
-# Compute and format total elapsed time in seconds
-formatted_time <- format_elapsed_time(
-  round(difftime(end_time, start_time, units = "secs"), 2)
-)
+# Export the summary_statistics to a csv
+export_db_to_csv(db_name, ss_filename)
+
+end_time <- Sys.time()  # End timing
+elapsed_time <- round(difftime(end_time, start_time, units = "secs"), 2)
 
 #------------------------------------------------------------------------------#
 #    FINAL SUMMARY                                                             #
 #------------------------------------------------------------------------------#
 
-print_section("SUMMARY")
-
-valid_files <- output_files[!sapply(output_files, is.null)]
-successful_runs <- length(valid_files)
-
 print_run_summary(
-  successful_runs, nosoi_settings$n_sim, db_name, ss_filename, parquet_file
+  df, paramsets_file, ss_filename, output_folder, mc_stats, elapsed_time
 )
 
