@@ -5,6 +5,21 @@ import torch
 from typing import Optional
 from torch.utils.data import DataLoader, TensorDataset, random_split
 from sklearn.preprocessing import StandardScaler
+import logging
+from logging_config import setup_logging
+
+# -----------------------------------------------------------------------------
+#  Configure logging
+# -----------------------------------------------------------------------------
+
+# Set up logger
+setup_logging()
+logger = logging.getLogger(__name__)
+
+
+# -----------------------------------------------------------------------------
+#  Functions
+# -----------------------------------------------------------------------------
 
 
 def merge_summary_and_parameters(
@@ -50,7 +65,7 @@ def merge_summary_and_parameters(
         merged_df = merged_df[merged_df["SS_11"] > 1]
         n_after = len(merged_df)
         n_dropped = n_before - n_after
-        print(
+        logger.info(
             f"Dropped {n_dropped:,} trivial simulations "
             f"(only patient zero infected)."
         )
@@ -160,7 +175,7 @@ def train_model(
     device: torch.device,
     epochs: int = 100,
     patience: int = 5,
-) -> torch.nn.Module:
+) -> tuple[torch.nn.Module, dict[str, list[float]]]:
     """
     Train a neural network model with early stopping.
 
@@ -187,11 +202,27 @@ def train_model(
     Returns
     -------
     torch.nn.Module
-        Trained model with the best weights loaded.
+        The trained model with the best weights loaded.
+    dict[str, list[float]]
+        A dictionary containing lists of average training and validation losses
+        across epochs. Keys are 'avg_train_loss' and 'avg_val_loss'.
+
+    Notes
+    -----
+    The best model (lowest validation loss) is tracked and loaded at the end
+    of training. Early stopping halts training if the validation loss does
+    not improve for `patience` consecutive epochs.
     """
+
     best_loss = float("inf")
     best_model_state = None
     trigger = 0
+
+    # Keep track of training history
+    history: dict[str, list[float]] = {
+        "avg_train_loss": [],
+        "avg_val_loss": [],
+    }
 
     for epoch in range(epochs):
         model.train()
@@ -215,11 +246,16 @@ def train_model(
                 val_loss += criterion(model(X), y).item()
         avg_val_loss = val_loss / len(val_loader)
 
-        print(
+        # Log each epoch when debugging
+        logger.debug(
             f"Epoch {epoch+1}: "
             f"Train Loss = {avg_train_loss:.4f}, "
             f"Val Loss = {avg_val_loss:.4f}"
         )
+
+        # Record history
+        history["avg_train_loss"].append(avg_train_loss)
+        history["avg_val_loss"].append(avg_val_loss)
 
         # Early stopping
         if avg_val_loss < best_loss:
@@ -229,13 +265,13 @@ def train_model(
         else:
             trigger += 1
             if trigger >= patience:
-                print("Early stopping triggered.")
+                logger.debug("Early stopping triggered.")
                 break
 
     if best_model_state is not None:
         model.load_state_dict(best_model_state)
 
-    return model
+    return model, history
 
 
 def evaluate_model(
