@@ -3,3 +3,5 @@ data/
 .Rhistory
 *.out
 *.err
+python/__pycache__
+.mypy_cache/
