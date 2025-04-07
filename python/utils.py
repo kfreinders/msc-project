@@ -5,7 +5,10 @@ from sklearn.preprocessing import StandardScaler
 
 
 def merge_summary_and_parameters(
-    summary_stats_csv: str, master_csv: str, output_csv: str
+    summary_stats_csv: str,
+    master_csv: str,
+    output_csv: str,
+    drop_trivial: bool = False,
 ) -> pd.DataFrame:
     """
     Inner join summary statistics and parameters on the seed and save to a CSV.
@@ -18,6 +21,9 @@ def merge_summary_and_parameters(
         Path to the CSV file containing nosoi simulation parameters.
     output_csv : str
         Path where the merged CSV file will be saved.
+    drop_trivial : bool, optional
+        Whether to preserve simulations with only one infected host (default is
+        False).
 
     Returns
     -------
@@ -30,6 +36,21 @@ def merge_summary_and_parameters(
 
     # Merge them on the 'seed' column
     merged_df = pd.merge(summary_df, master_df, on="seed", how="inner")
+
+    # Optionally drop trivial simulations
+    if drop_trivial:
+        if "SS_11" not in merged_df.columns:
+            raise ValueError(
+                "SS_11 (total hosts) column not found in summary statistics."
+            )
+        n_before = len(merged_df)
+        merged_df = merged_df[merged_df["SS_11"] > 1]
+        n_after = len(merged_df)
+        n_dropped = n_before - n_after
+        print(
+            f"Dropped {n_dropped:,} trivial simulations "
+            f"(only patient zero infected)."
+        )
 
     # Save the merged dataset
     merged_df.to_csv(output_csv, index=False)
@@ -110,9 +131,12 @@ def split_data(
             f"Split proportions must sum to 1.0 (got {total:.4f})"
         )
 
-    train_size = int(ptrain * len(dataset))
-    val_size = int(pval * len(dataset))
-    test_size = int(ptest * len(dataset))
+    # Ensure that the split sizes always exactly sum up
+    n = len(dataset)
+    train_size = round(ptrain * n)
+    val_size = round(pval * n)
+    test_size = n - train_size - val_size
+
     train_ds, val_ds, test_ds = random_split(
         dataset, [train_size, val_size, test_size]
     )
