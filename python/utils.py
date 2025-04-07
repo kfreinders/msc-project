@@ -123,3 +123,126 @@ def split_data(
         DataLoader(test_ds, batch_size=batch_size),
     )
 
+
+def train_model(
+    model: torch.nn.Module,
+    train_loader: torch.utils.data.DataLoader,
+    val_loader: torch.utils.data.DataLoader,
+    criterion: torch.nn.modules.loss._Loss,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    epochs: int = 100,
+    patience: int = 5,
+) -> torch.nn.Module:
+    """
+    Train a neural network model with early stopping.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The neural network model to train.
+    train_loader : torch.utils.data.DataLoader
+        DataLoader for the training dataset.
+    val_loader : torch.utils.data.DataLoader
+        DataLoader for the validation dataset.
+    criterion : torch.nn.modules.loss._Loss
+        Loss function used for training.
+    optimizer : torch.optim.Optimizer
+        Optimizer used to update model weights.
+    device : torch.device
+        Device on which the model is trained (CPU or CUDA).
+    epochs : int, optional
+        Maximum number of training epochs (default is 100).
+    patience : int, optional
+        Number of epochs with no improvement after which training is stopped
+        early (default is 5).
+
+    Returns
+    -------
+    torch.nn.Module
+        Trained model with the best weights loaded.
+    """
+    best_loss = float("inf")
+    best_model_state = None
+    trigger = 0
+
+    for epoch in range(epochs):
+        model.train()
+        total_loss = 0
+        for X, y in train_loader:
+            X, y = X.to(device), y.to(device)
+            optimizer.zero_grad()
+            loss = criterion(model(X), y)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+
+        avg_train_loss = total_loss / len(train_loader)
+
+        # Validation
+        model.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for X, y in val_loader:
+                X, y = X.to(device), y.to(device)
+                val_loss += criterion(model(X), y).item()
+        avg_val_loss = val_loss / len(val_loader)
+
+        print(
+            f"Epoch {epoch+1}: "
+            f"Train Loss = {avg_train_loss:.4f}, "
+            f"Val Loss = {avg_val_loss:.4f}"
+        )
+
+        # Early stopping
+        if avg_val_loss < best_loss:
+            best_loss = avg_val_loss
+            trigger = 0
+            best_model_state = model.state_dict()
+        else:
+            trigger += 1
+            if trigger >= patience:
+                print("Early stopping triggered.")
+                break
+
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state)
+
+    return model
+
+
+def evaluate_model(
+    model: torch.nn.Module,
+    test_loader: torch.utils.data.DataLoader,
+    criterion: torch.nn.modules.loss._Loss,
+    device: torch.device,
+) -> float:
+    """
+    Evaluate a trained model on a test set.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The trained neural network model.
+    test_loader : torch.utils.data.DataLoader
+        DataLoader for the test dataset.
+    criterion : torch.nn.modules.loss._Loss
+        Loss function used for evaluation.
+    device : torch.device
+        Device on which the model is evaluated (CPU or CUDA).
+
+    Returns
+    -------
+    float
+        Average loss on the test dataset.
+    """
+    model.eval()
+    total_loss = 0
+    with torch.no_grad():
+        for X, y in test_loader:
+            X, y = X.to(device), y.to(device)
+            total_loss += criterion(model(X), y).item()
+
+    avg_test_loss = total_loss / len(test_loader)
+    print(f"Test Loss: {avg_test_loss:.4f}")
+    return avg_test_loss
