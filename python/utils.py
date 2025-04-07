@@ -1,5 +1,8 @@
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import torch
+from typing import Optional
 from torch.utils.data import DataLoader, TensorDataset, random_split
 from sklearn.preprocessing import StandardScaler
 
@@ -269,3 +272,106 @@ def evaluate_model(
 
     avg_test_loss = total_loss / len(test_loader)
     return avg_test_loss
+
+
+# Disable gradient calculation (important for inference only, saves memory)
+@torch.no_grad()
+def predict_parameters(
+    model: torch.nn.Module,
+    loader: torch.utils.data.DataLoader,
+    device: torch.device,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Predict outputs for a dataset using a trained model.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Trained neural network model.
+    loader : torch.utils.data.DataLoader
+        DataLoader providing input features and true labels.
+    device : torch.device
+        Device on which prediction is performed.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        Tuple containing predicted values and true labels.
+    """
+    # Set the model to evaluation mode (disables i.a. dropout)
+    model.eval()
+    preds_list = []
+    trues_list = []
+
+    # Loop over batches from the loader
+    for X_batch, y_batch in loader:
+        # Move both features and labels to the device (GPU or CPU)
+        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+
+        # Make predictions
+        y_pred = model(X_batch)
+
+        # Move predictions and true labels back to CPU
+        preds_list.append(y_pred.cpu())
+        trues_list.append(y_batch.cpu())
+
+    # Convert to a single numpy arrays
+    preds_np = torch.cat(preds_list, dim=0).numpy()
+    trues_np = torch.cat(trues_list, dim=0).numpy()
+
+    return preds_np, trues_np
+
+
+def plot_predictions(
+    preds: np.ndarray,
+    trues: np.ndarray,
+    param_names: Optional[list[str]] = None,
+    n_cols: int = 3,
+    figsize: tuple[int, int] = (18, 12),
+) -> None:
+    """
+    Plot predicted versus true values for each output parameter.
+
+    Parameters
+    ----------
+    preds : numpy.ndarray
+        Predicted values from the model.
+    trues : numpy.ndarray
+        True target values.
+    param_names : list of str, optional
+        Names of the output parameters. If None, parameters will be
+        labeled by index.
+    n_cols : int, optional
+        Number of columns in the plot grid (default is 3).
+    figsize : tuple of int, optional
+        Figure size (default is (18, 12)).
+
+    Returns
+    -------
+    None
+    """
+    # Calculate how many rows we need
+    n_params = preds.shape[1]
+    n_rows = (n_params + n_cols - 1) // n_cols
+
+    # Construct each scatterplot
+    plt.figure(figsize=figsize)
+    for i in range(n_params):
+        plt.subplot(n_rows, n_cols, i + 1)
+        plt.scatter(trues[:, i], preds[:, i], alpha=0.3)
+
+        # Draw the diagonal
+        min_val = min(trues[:, i].min(), preds[:, i].min())
+        max_val = max(trues[:, i].max(), preds[:, i].max())
+        plt.plot([min_val, max_val], [min_val, max_val], 'k--', lw=1)
+
+        # Set plot labels
+        plt.xlabel("True Values")
+        plt.ylabel("Predicted Values")
+        if param_names:
+            plt.title(param_names[i])
+        else:
+            plt.title(str(i))
+
+    plt.tight_layout()
+    plt.show()
