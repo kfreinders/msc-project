@@ -1,10 +1,67 @@
-import torch
 import itertools
+import json
+import logging
+
+import torch
+from torch import nn, optim
+from torch.utils.data import DataLoader
+
+from logging_config import setup_logging
 from model import NeuralNetwork
 from utils import train_model, load_data, split_data
-from torch import nn, optim
-import logging
-from logging_config import setup_logging
+
+
+def generate_paramsets(params: dict[str, list[float]]) -> list[dict]:
+    """Generate all hyperparameter combinations."""
+    keys, values = zip(*params.items())
+    combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
+    return combinations
+
+
+def build_dataloaders(dataset, batch_size: int):
+    """Split dataset and create DataLoaders."""
+    train, val, _ = split_data(
+        dataset, ptrain=0.8, pval=0.2, ptest=0.0, batch_size=batch_size
+    )
+    return train, val
+
+
+def build_model(config: dict, device: torch.device) -> torch.nn.Module:
+    """Build a model based on the hyperparameters."""
+    model = NeuralNetwork(
+        input_dim=26,
+        output_dim=6,
+        hidden_size=config["hidden_size"],
+        num_layers=config["num_layers"],
+        dropout_rate=config["dropout_rate"],
+    )
+    return model.to(device)
+
+
+def train_and_evaluate(
+    model: torch.nn.Module,
+    config: dict,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    device: torch.device
+) -> float:
+    """Train and evaluate a single configuration."""
+    optimizer = optim.Adam(model.parameters(), lr=config["learning_rate"])
+    criterion = nn.MSELoss()
+
+    _, history = train_model(
+        model,
+        train_loader,
+        val_loader,
+        criterion,
+        optimizer,
+        device,
+        epochs=100,
+        patience=5,
+    )
+
+    final_val_loss = min(history["avg_val_loss"])
+    return final_val_loss
 
 
 def main() -> None:
@@ -21,7 +78,7 @@ def main() -> None:
     dataset = load_data("data/nosoi/merged.csv")
 
     # Define the hyperparameter and architecture search space
-    search_space = {
+    search_space: dict[str, list[float]] = {
         "learning_rate": [1e-2, 1e-3, 1e-4],
         "hidden_size": [32, 64, 128, 256],
         "num_layers": [2, 3, 4, 5],
@@ -30,10 +87,7 @@ def main() -> None:
     }
 
     # Generate all possible combinations for a full grid search
-    keys, values = zip(*search_space.items())
-    hyperparameter_combinations = [
-        dict(zip(keys, v)) for v in itertools.product(*values)
-    ]
+    hyperparameter_combinations = generate_paramsets(search_space)
     logger.info(
         f"Total configurations to try: {len(hyperparameter_combinations)}"
     )
@@ -47,54 +101,30 @@ def main() -> None:
         logger.debug(f"Configuration details: {config}")
 
         # Create dataloaders with specified batch size
-        train, val, _ = split_data(
-            dataset,
-            ptrain=0.8,
-            pval=0.2,
-            ptest=0.0,
-            batch_size=config["batch_size"],
-        )
+        train, val = build_dataloaders(dataset, config["batch_size"])
 
         # Build model dynamically
-        model = NeuralNetwork(
-            input_dim=26,
-            output_dim=6,
-            hidden_size=config["hidden_size"],
-            num_layers=config["num_layers"],
-            dropout_rate=config["dropout_rate"],
-        ).to(device)
+        model = build_model(config, device)
 
-        optimizer = optim.Adam(model.parameters(), lr=config["learning_rate"])
-        criterion = nn.MSELoss()
-
-        # Train
-        _, history = train_model(
-            model,
-            train,
-            val,
-            criterion,
-            optimizer,
-            device,
-            epochs=100,
-            patience=5
+        # Train and pick best val loss during training
+        final_val_loss = train_and_evaluate(
+            model, config, train, val, device
         )
 
-        final_val_loss = min(
-            history["avg_val_loss"]
-        )  # Pick best val loss during training
-
         # Save the config and its performance
-        results.append((config, final_val_loss))
         logger.debug(
             f"Final validation loss for current config: {final_val_loss:.4f}"
         )
+        results.append((config, final_val_loss))
 
     # Sort by lowest validation loss
     results.sort(key=lambda x: x[1])
+    best_config, best_loss = results[0]
 
     # Print best result
     logger.info(
-        f"Best hyperparameters found: {results[0][0]} with validation loss {results[0][1]:.4f}"
+        f"Best hyperparameters found: {best_config} "
+        f"with validation loss {best_loss}"
     )
 
 
