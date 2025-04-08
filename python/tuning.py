@@ -18,7 +18,9 @@ def generate_paramsets(params: dict[str, list[float]]) -> list[dict]:
     return combinations
 
 
-def build_dataloaders(dataset, batch_size: int):
+def build_dataloaders(
+        dataset: torch.utils.data.TensorDataset, batch_size: int
+) -> tuple[DataLoader, DataLoader]:
     """Split dataset and create DataLoaders."""
     train, val, _ = split_data(
         dataset, ptrain=0.8, pval=0.2, ptest=0.0, batch_size=batch_size
@@ -92,9 +94,32 @@ def main() -> None:
         f"Total configurations to try: {len(hyperparameter_combinations)}"
     )
 
-    # Start full grid search
+    # Try to resume from existing results
     results = []
+    try:
+        with open("data/dnn/tuning_results.json", "r") as f:
+            loaded = json.load(f)
+            results = loaded.get("results", [])
+            logger.info(
+                f"Loaded {len(results)} previously saved configurations."
+            )
+    except FileNotFoundError:
+        logger.info("No previous results found. Starting new tuning run.")
+
+    # Build set of already tried configurations
+    tried_configs = {json.dumps(r[0], sort_keys=True) for r in results}
+
+    # Start full grid search
     for idx, config in enumerate(hyperparameter_combinations, start=1):
+        # Skip this configuration if we've tried it before
+        config_serialized = json.dumps(config, sort_keys=True)
+        if config_serialized in tried_configs:
+            logger.info(
+                f"Skipping already tried configuration "
+                f"{idx}/{len(hyperparameter_combinations)}"
+            )
+            continue
+
         logger.info(
             f"Training configuration {idx}/{len(hyperparameter_combinations)}"
         )
@@ -117,6 +142,10 @@ def main() -> None:
         )
         results.append((config, final_val_loss))
 
+        # Save a checkpoint after every configuration
+        with open("data/dnn/tuning_results.json", "w") as f:
+            json.dump({"results": results}, f, indent=4)
+
     # Sort by lowest validation loss
     results.sort(key=lambda x: x[1])
     best_config, best_loss = results[0]
@@ -127,7 +156,12 @@ def main() -> None:
         f"with validation loss {best_loss}"
     )
 
+    # Save results
+    with open("tuning_results.json", "w") as f:
+        json.dump(
+            {"best_config": best_config, "best_loss": best_loss}, f, indent=4
+        )
+
 
 if __name__ == "__main__":
-
     main()
