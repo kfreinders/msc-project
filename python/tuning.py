@@ -12,7 +12,25 @@ from utils import train_model, load_data, split_data
 
 
 def generate_paramsets(params: dict[str, list[float]]) -> list[dict]:
-    """Generate all hyperparameter combinations."""
+    """
+    Generate all combinations of hyperparameter settings.
+
+    This function creates a list of dictionaries, where each dictionary
+    represents one unique combination of hyperparameter values from the
+    provided search space.
+
+    Parameters
+    ----------
+    params : dict[str, list[float]]
+        Dictionary where keys are hyperparameter names and values are
+        lists of possible values to try.
+
+    Returns
+    -------
+    list[dict]
+        List of dictionaries, each containing one combination of
+        hyperparameters.
+    """
     keys, values = zip(*params.items())
     combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
     return combinations
@@ -21,7 +39,24 @@ def generate_paramsets(params: dict[str, list[float]]) -> list[dict]:
 def build_dataloaders(
         dataset: torch.utils.data.TensorDataset, batch_size: int
 ) -> tuple[DataLoader, DataLoader]:
-    """Split dataset and create DataLoaders."""
+    """
+    Split the dataset and create training and validation DataLoaders.
+
+    This function splits the provided dataset into training and validation
+    sets, and returns corresponding DataLoaders with the specified batch size.
+
+    Parameters
+    ----------
+    dataset : torch.utils.data.TensorDataset
+        The complete dataset to split into training and validation sets.
+    batch_size : int
+        The number of samples per batch to load.
+
+    Returns
+    -------
+    tuple[DataLoader, DataLoader]
+        Training and validation DataLoaders.
+    """
     train, val, _ = split_data(
         dataset, ptrain=0.8, pval=0.2, ptest=0.0, batch_size=batch_size
     )
@@ -29,7 +64,29 @@ def build_dataloaders(
 
 
 def build_model(config: dict, device: torch.device) -> torch.nn.Module:
-    """Build a model based on the hyperparameters."""
+    """
+    Build a neural network model based on a given hyperparameter configuration.
+
+    This function initializes a fully connected feedforward neural network
+    (DNN) using the specified configuration and moves it to the target device.
+
+    Parameters
+    ----------
+    config : dict
+        Dictionary containing the model hyperparameters. Must include:
+        - 'hidden_size' (int): Number of neurons in each hidden layer.
+        - 'num_layers' (int): Total number of layers including the first hidden
+        layer.
+        - 'dropout_rate' (float): Dropout probability applied after each hidden
+        layer.
+    device : torch.device
+        The device (CPU or CUDA) on which to place the model.
+
+    Returns
+    -------
+    torch.nn.Module
+        The constructed neural network model.
+    """
     model = NeuralNetwork(
         input_dim=26,
         output_dim=6,
@@ -47,7 +104,32 @@ def train_and_evaluate(
     val_loader: DataLoader,
     device: torch.device
 ) -> float:
-    """Train and evaluate a single configuration."""
+    """
+    Train the model and return the best validation loss achieved.
+
+    This function trains a given model using the training DataLoader,
+    monitors the validation loss during training, and returns the
+    minimum validation loss achieved across epochs.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The neural network model to train.
+    config : dict
+        Dictionary containing hyperparameters. Must include learning rate:
+        - 'learning_rate' (float): Learning rate for the optimizer.
+    train_loader : DataLoader
+        DataLoader for the training set.
+    val_loader : DataLoader
+        DataLoader for the validation set.
+    device : torch.device
+        The device (CPU or CUDA) used for training.
+
+    Returns
+    -------
+    float
+        The best (lowest) validation loss achieved during training.
+    """
     optimizer = optim.Adam(model.parameters(), lr=config["learning_rate"])
     criterion = nn.MSELoss()
 
