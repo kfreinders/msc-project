@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import torch
 from typing import Optional
-from torch.utils.data import DataLoader, TensorDataset, random_split
+from torch.utils.data import DataLoader, Subset, TensorDataset, random_split
 from sklearn.preprocessing import StandardScaler
 import logging
 from logging_config import setup_logging
@@ -76,43 +76,70 @@ def merge_summary_and_parameters(
     return merged_df
 
 
-def load_data(csv_path: str) -> torch.utils.data.TensorDataset:
+def load_data(
+    csv_path: str,
+    extract_columns: Optional[list[str]] = None
+) -> tuple[TensorDataset, dict[str, np.ndarray]]:
     """
     Load and normalize the dataset from a CSV file.
+
+    Optionally extract specific summary statistic columns (unnormalized)
+    for later analysis (e.g., simulation length, transmission chain size).
 
     Parameters
     ----------
     csv_path : str
         Path to the merged CSV file containing summary statistics and
         parameters.
+    extract_columns : list of str, optional
+        List of summary statistic column names to extract separately
+        before normalization.
 
     Returns
     -------
-    torch.utils.data.TensorDataset
-        A dataset containing normalized summary statistics as features and
-        parameters as labels.
+    dataset : torch.utils.data.TensorDataset
+        Dataset containing normalized summary statistics as features
+        and raw parameters as labels.
+    extracted : dict of str → np.ndarray
+        Dictionary mapping extracted column names to their unnormalized values.
+        Empty if no columns were extracted.
     """
     df = pd.read_csv(csv_path)
 
-    # Drop the 'seed' column
+    # Drop non-feature columns
     df = df.drop(columns=["seed"])
 
-    # Find where the summary statistics end
-    ss_cols = [col for col in df.columns if col.startswith("SS_")]
+    # Identify summary statistic columns
+    ss_cols = [col for col in df.columns if col.upper().startswith("SS_")]
     n_ss = len(ss_cols)
 
+    # Input features and target parameters
     X = df.iloc[:, :n_ss].values  # Summary stats
     y = df.iloc[:, n_ss:].values  # Parameters
+
+    # Extract unnormalized columns
+    extracted = {}
+    if extract_columns is not None:
+        missing = [col for col in extract_columns if col not in df.columns]
+        if missing:
+            raise ValueError(
+                f"Column(s) not found in dataset: {', '.join(missing)}"
+            )
+        # Build mapping of column name to unnormalized values
+        extracted = {
+            col: np.asarray(df[col].values.copy()) for col in extract_columns
+        }
 
     # Normalize features
     scaler = StandardScaler()
     X = scaler.fit_transform(X)
 
+    # Build PyTorch dataset
     X_tensor = torch.tensor(X, dtype=torch.float32)
     y_tensor = torch.tensor(y, dtype=torch.float32)
     dataset = TensorDataset(X_tensor, y_tensor)
 
-    return dataset
+    return dataset, extracted
 
 
 def split_data(
