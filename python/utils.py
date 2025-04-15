@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import matplotlib.figure
 import numpy as np
 import pandas as pd
 import torch
@@ -471,52 +472,75 @@ def plot_predictions(
     preds: np.ndarray,
     trues: np.ndarray,
     param_names: Optional[list[str]] = None,
+    color_by: Optional[np.ndarray] = None,
+    color_label: str = "Color scale",
     n_cols: int = 3,
     figsize: tuple[int, int] = (18, 12),
-) -> None:
+) -> matplotlib.figure.Figure:
     """
     Plot predicted versus true values for each output parameter.
 
     Parameters
     ----------
-    preds : numpy.ndarray
-        Predicted values from the model.
-    trues : numpy.ndarray
+    preds : np.ndarray
+        Predicted values from the model (N samples × M parameters).
+    trues : np.ndarray
         True target values.
     param_names : list of str, optional
-        Names of the output parameters. If None, parameters will be
-        labeled by index.
-    n_cols : int, optional
-        Number of columns in the plot grid (default is 3).
-    figsize : tuple of int, optional
-        Figure size (default is (18, 12)).
+        Names of the output parameters. If None, parameters are labeled by
+        index.
+    color_by : np.ndarray, optional
+        Optional variable to color points by (e.g., simulation size or
+        duration). Must be the same length as `preds` and `trues`.
+    color_label : str, optional
+        Label to show next to the colorbar. Default is "Color scale".
+    n_cols : int
+        Number of columns in the subplot grid.
+    figsize : tuple[int, int]
+        Overall size of the figure.
 
     Returns
     -------
-    None
+    matplotlib.figure.Figure
+        A matplotlib figure with a grid of all the predicted versus true value
+        plots.
     """
-    # Calculate how many rows we need
     n_params = preds.shape[1]
     n_rows = (n_params + n_cols - 1) // n_cols
 
-    # Construct each scatterplot
-    plt.figure(figsize=figsize)
-    for i in range(n_params):
-        plt.subplot(n_rows, n_cols, i + 1)
-        plt.scatter(trues[:, i], preds[:, i], alpha=0.3)
+    fig, axes = plt.subplots(
+        n_rows, n_cols, figsize=figsize, constrained_layout=True
+    )
+    axes = axes.flatten()
 
-        # Draw the diagonal
+    scatter = None  # Store for colorbar
+
+    for i in range(n_params):
+        ax = axes[i]
+
+        if color_by is not None:
+            scatter = ax.scatter(
+                trues[:, i], preds[:, i],
+                c=color_by, cmap="viridis", alpha=0.5
+            )
+        else:
+            ax.scatter(trues[:, i], preds[:, i], alpha=0.3)
+
         min_val = min(trues[:, i].min(), preds[:, i].min())
         max_val = max(trues[:, i].max(), preds[:, i].max())
-        plt.plot([min_val, max_val], [min_val, max_val], 'k--', lw=1)
+        ax.plot([min_val, max_val], [min_val, max_val], 'k--', lw=1)
 
-        # Set plot labels
-        plt.xlabel("True Values")
-        plt.ylabel("Predicted Values")
-        if param_names:
-            plt.title(param_names[i])
-        else:
-            plt.title(str(i))
+        ax.set_xlabel("True Values")
+        ax.set_ylabel("Predicted Values")
+        ax.set_title(param_names[i] if param_names else f"Parameter {i}")
 
-    plt.tight_layout()
-    plt.show()
+    # Hide unused axes
+    for i in range(n_params, len(axes)):
+        axes[i].set_visible(False)
+
+    # Shared colorbar
+    if scatter is not None:
+        cbar = fig.colorbar(scatter, ax=axes.tolist(), shrink=0.95)
+        cbar.set_label(color_label)
+
+    return fig
