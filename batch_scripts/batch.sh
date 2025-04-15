@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=nosoi_parallel
-#SBATCH --time=02-00:00:00
+#SBATCH --time=02-12:00:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=12
 #SBATCH --mem=26GB
