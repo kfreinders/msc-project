@@ -193,6 +193,88 @@ def split_data(
     )
 
 
+def split_data_with_meta(
+    dataset: TensorDataset,
+    meta: dict[str, np.ndarray],
+    ptrain: float,
+    pval: float,
+    ptest: float,
+    batch_size: int = 64,
+    seed: Optional[int] = None,
+) -> tuple[
+    DataLoader, DataLoader, DataLoader,
+    dict[str, np.ndarray], dict[str, np.ndarray], dict[str, np.ndarray]
+]:
+    """
+    Shuffle and split dataset and its associated metadata.
+
+    Parameters
+    ----------
+    dataset : TensorDataset
+        The full dataset of features and targets.
+    meta : dict[str, np.ndarray]
+        Dictionary of metadata arrays (e.g., unnormalized simulation lengths),
+        with one value per sample.
+    ptrain : float
+        Proportion of samples used for training.
+    pval : float
+        Proportion used for validation.
+    ptest : float
+        Proportion used for testing.
+    batch_size : int, optional
+        Batch size for DataLoaders.
+    seed : int, optional
+        If provided, controls the random shuffling for reproducibility.
+
+    Returns
+    -------
+    train_loader, val_loader, test_loader : DataLoader
+        DataLoaders for each split.
+    train_meta, val_meta, test_meta : dict[str, np.ndarray]
+        Sliced metadata dictionaries corresponding to each split.
+    """
+    total = ptrain + pval + ptest
+    if abs(total - 1.0) > 0.01:
+        raise ValueError(
+            f"Split proportions must sum to 1.0 (got {total:.4f})"
+        )
+
+    n = len(dataset)
+    indices = np.arange(n)
+
+    if seed is not None:
+        g = torch.Generator().manual_seed(seed)
+        indices = torch.randperm(n, generator=g).numpy()
+    else:
+        np.random.shuffle(indices)
+
+    # Split indices
+    train_size = round(ptrain * n)
+    val_size = round(pval * n)
+
+    train_idx = indices[:train_size]
+    val_idx = indices[train_size:train_size + val_size]
+    test_idx = indices[train_size + val_size:]
+
+    # Split dataset
+    train_ds = Subset(dataset, train_idx.tolist())
+    val_ds = Subset(dataset, val_idx.tolist())
+    test_ds = Subset(dataset, test_idx.tolist())
+
+    # Split meta
+    def slice_meta(idxs: np.ndarray) -> dict[str, np.ndarray]:
+        return {k: v[idxs] for k, v in meta.items()}
+
+    return (
+        DataLoader(train_ds, batch_size=batch_size, shuffle=True),
+        DataLoader(val_ds, batch_size=batch_size),
+        DataLoader(test_ds, batch_size=batch_size),
+        slice_meta(train_idx),
+        slice_meta(val_idx),
+        slice_meta(test_idx),
+    )
+
+
 def train_model(
     model: torch.nn.Module,
     train_loader: torch.utils.data.DataLoader,
