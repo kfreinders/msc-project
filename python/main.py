@@ -34,7 +34,8 @@ def main() -> None:
         "data/nosoi/summary_stats_export.csv",
         "data/nosoi/master.csv",
         "data/nosoi/merged.csv",
-        drop_trivial=True,
+        filter_fn=lambda df: df["SS_11"] > 2000,
+        filter_fn_desc="SS_11 > 2000"
     )
 
     # Read the merged csv file and also retrieve summary statistic 11, which is

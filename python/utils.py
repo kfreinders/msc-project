@@ -3,7 +3,7 @@ import matplotlib.figure
 import numpy as np
 import pandas as pd
 import torch
-from typing import Optional
+from typing import Callable, Optional
 from torch.utils.data import DataLoader, Subset, TensorDataset, random_split
 from sklearn.preprocessing import StandardScaler
 import logging
@@ -27,7 +27,8 @@ def merge_summary_and_parameters(
     summary_stats_csv: str,
     master_csv: str,
     output_csv: str,
-    drop_trivial: bool = False,
+    filter_fn: Optional[Callable[[pd.DataFrame], pd.Series]] = None,
+    filter_fn_desc: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Inner join summary statistics and parameters on the seed and save to a CSV.
@@ -40,14 +41,28 @@ def merge_summary_and_parameters(
         Path to the CSV file containing nosoi simulation parameters.
     output_csv : str
         Path where the merged CSV file will be saved.
-    drop_trivial : bool, optional
-        Whether to preserve simulations with only one infected host (default is
-        False).
+    filter_fn : Callable, optional
+        A function that takes the merged DataFrame and returns a Boolean mask
+        indicating which rows to keep.
 
     Returns
     -------
     pandas.DataFrame
         Merged DataFrame containing both summary statistics and parameters.
+
+    Examples
+    --------
+    Merge the master and summary statistics files into `merged.csv`, keeping
+    only rows where the total number of hosts (SS_11) exceeds 2000.
+
+    merge_summary_and_parameters(
+        "data/nosoi/summary_stats_export.csv",
+        "data/nosoi/master.csv",
+        "data/nosoi/merged.csv",
+        filter_fn=lambda df: df["SS_11"] > 2000,
+        filter_fn_desc="SS_11 > 2000"
+    )
+
     """
     # Load summary statistics and parameters
     summary_df = pd.read_csv(summary_stats_csv)
@@ -56,19 +71,20 @@ def merge_summary_and_parameters(
     # Merge them on the 'seed' column
     merged_df = pd.merge(summary_df, master_df, on="seed", how="inner")
 
-    # Optionally drop trivial simulations
-    if drop_trivial:
-        if "SS_11" not in merged_df.columns:
-            raise ValueError(
-                "SS_11 (total hosts) column not found in summary statistics."
-            )
+    # Optional filtering logic
+    if filter_fn is not None:
         n_before = len(merged_df)
-        merged_df = merged_df[merged_df["SS_11"] > 1]
+        mask = filter_fn(merged_df)
+        merged_df = merged_df[mask]
         n_after = len(merged_df)
-        n_dropped = n_before - n_after
         logger.info(
-            f"Dropped {n_dropped:,} trivial simulations "
-            f"(only patient zero infected)."
+            f"Filtered {n_before - n_after:,} rows"
+        )
+
+    # Print filter function description for logging purposes
+    if filter_fn_desc is not None:
+        logger.info(
+            f"Row filtering condition: {filter_fn_desc}"
         )
 
     # Save the merged dataset
