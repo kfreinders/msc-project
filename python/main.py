@@ -1,3 +1,4 @@
+import numpy as np
 import logging
 from logging_config import setup_logging
 from model import NeuralNetwork
@@ -13,6 +14,16 @@ from utils import (
     predict_parameters,
     plot_predictions,
 )
+
+
+def log_transform(x: np.ndarray) -> np.ndarray:
+    """Wrapper for np.log to please the type checker."""
+    return np.log(x)
+
+
+def sqrt_transform(x: np.ndarray) -> np.ndarray:
+    """Wrapper for np.sqrt to further please the type checker."""
+    return np.sqrt(x)
 
 # ------------------------------------------------------------------------------
 # Main function
@@ -41,7 +52,17 @@ def main() -> None:
     # Read the merged csv file and also retrieve summary statistic 11, which is
     # the total no. hosts at the end of the simulation.
     logger.info("Generating dataset from csv...")
-    dataset, meta = load_data("data/nosoi/merged.csv", ["SS_11"])
+
+    # Which transforms to apply to the data for training
+    transform_map = {
+        "p_fatal": log_transform
+    }
+
+    dataset, meta, log_idxs = load_data(
+        "data/nosoi/merged.csv",
+        extract_columns=["SS_11"],
+        target_transforms=transform_map
+    )
 
     # Split dataset into training, validation and testing sets
     logger.info(
@@ -100,6 +121,11 @@ def main() -> None:
 
     # Predict
     preds, trues = predict_parameters(model, val, device)
+
+    # Apply inverse transform for plotting
+    for i in log_idxs:
+        preds[:, i] = np.exp(preds[:, i])
+        trues[:, i] = np.exp(trues[:, i])
 
     # Plot
     param_names = [

@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.figure
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import torch
 from typing import Callable, Optional
@@ -95,8 +96,9 @@ def merge_summary_and_parameters(
 
 def load_data(
     csv_path: str,
-    extract_columns: Optional[list[str]] = None
-) -> tuple[TensorDataset, dict[str, np.ndarray]]:
+    extract_columns: Optional[list[str]] = None,
+    target_transforms: Optional[dict[str, Callable]] = None
+) -> tuple[TensorDataset, dict[str, np.ndarray], list[int]]:
     """
     Load and normalize the dataset from a CSV file.
 
@@ -111,6 +113,9 @@ def load_data(
     extract_columns : list of str, optional
         List of summary statistic column names to extract separately
         before normalization.
+    target_transforms : dict of str → Callable, optional
+        Mapping of column names to transformation functions. The transformation
+        functions will be applied to those columns.
 
     Returns
     -------
@@ -121,18 +126,38 @@ def load_data(
         Dictionary mapping extracted column names to their unnormalized values.
         Empty if no columns were extracted.
     """
+    # Load the data from merged csv and drop non-feature columns
     df = pd.read_csv(csv_path)
-
-    # Drop non-feature columns
     df = df.drop(columns=["seed"])
 
     # Identify summary statistic columns
     ss_cols = [col for col in df.columns if col.upper().startswith("SS_")]
     n_ss = len(ss_cols)
 
-    # Input features and target parameters
-    X = df.iloc[:, :n_ss].values  # Summary stats
-    y = df.iloc[:, n_ss:].values  # Parameters
+    # Normalize input features (summary statistics)
+    X = df.iloc[:, :n_ss].values
+    X = StandardScaler().fit_transform(X)
+
+    # Targets (parameters)
+    y_df = df.iloc[:, n_ss:].copy()
+    transformed_indices: list[int] = []
+
+    transformed_indices = []
+    if target_transforms:
+        for col, transform_fn in target_transforms.items():
+            if col not in y_df.columns:
+                raise ValueError(
+                    f"Target column '{col}' not found in dataset."
+                )
+            idx = y_df.columns.get_indexer([col])[0]
+            transformed_indices.append(idx)
+
+            logger.debug(
+                f"Applying {transform_fn.__name__} to '{col}' (index {idx})"
+            )
+            y_df[col] = transform_fn(y_df[col].to_numpy())
+
+    y = y_df.values
 
     # Extract unnormalized columns
     extracted = {}
@@ -144,19 +169,16 @@ def load_data(
             )
         # Build mapping of column name to unnormalized values
         extracted = {
-            col: np.asarray(df[col].values.copy()) for col in extract_columns
+            col: df[col].to_numpy(copy=True) for col in extract_columns
         }
 
-    # Normalize features
-    scaler = StandardScaler()
-    X = scaler.fit_transform(X)
-
     # Build PyTorch dataset
-    X_tensor = torch.tensor(X, dtype=torch.float32)
-    y_tensor = torch.tensor(y, dtype=torch.float32)
-    dataset = TensorDataset(X_tensor, y_tensor)
+    dataset = TensorDataset(
+        torch.tensor(X, dtype=torch.float32),
+        torch.tensor(y, dtype=torch.float32)
+    )
 
-    return dataset, extracted
+    return dataset, extracted, transformed_indices
 
 
 def split_data(
