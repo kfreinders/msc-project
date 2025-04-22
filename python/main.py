@@ -103,11 +103,11 @@ def main() -> None:
 
     # Plot
     param_names = [
-        "mean_nContact",
         "mean_t_incub",
-        "mean_p_trans",
-        "p_fatal",
+        "stdv_t_incub",
+        "mean_nContact",
         "p_trans",
+        "p_fatal",
         "t_recovery",
     ]
 
