@@ -61,7 +61,8 @@ def main() -> None:
     dataset, meta, log_idxs = load_data(
         "data/nosoi/merged.csv",
         extract_columns=["SS_11"],
-        target_transforms=transform_map
+        target_transforms=transform_map,
+        use_infectivity=True
     )
 
     # Split dataset into training, validation and testing sets
@@ -81,7 +82,7 @@ def main() -> None:
     logger.info("Initializing model...")
     model = NeuralNetwork(
         input_dim=26,
-        output_dim=6,
+        output_dim=5,
         hidden_size=256,
         num_layers=4,
         dropout_rate=0.1
@@ -131,7 +132,7 @@ def main() -> None:
     param_names = [
         "mean_t_incub",
         "stdv_t_incub",
-        "mean_nContact",
+        "infectivity",
         "p_trans",
         "p_fatal",
         "t_recovery",

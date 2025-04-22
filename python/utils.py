@@ -97,7 +97,8 @@ def merge_summary_and_parameters(
 def load_data(
     csv_path: str,
     extract_columns: Optional[list[str]] = None,
-    target_transforms: Optional[dict[str, Callable]] = None
+    target_transforms: Optional[dict[str, Callable]] = None,
+    use_infectivity: Optional[bool] = False,
 ) -> tuple[TensorDataset, dict[str, np.ndarray], list[int]]:
     """
     Load and normalize the dataset from a CSV file.
@@ -116,6 +117,9 @@ def load_data(
     target_transforms : dict of str → Callable, optional
         Mapping of column names to transformation functions. The transformation
         functions will be applied to those columns.
+    use_infectivity : bool, optional (default is False)
+        When enabled, drops mean_nContact and p_trans and instead uses the
+        product of these two values.
 
     Returns
     -------
@@ -141,6 +145,28 @@ def load_data(
     # Targets (parameters)
     y_df = df.iloc[:, n_ss:].copy()
     transformed_indices: list[int] = []
+
+    if use_infectivity:
+        logger.debug(
+            "Using infectivity instead of mean_nContact and p_trans."
+        )
+
+        # Compute infectivity
+        if "mean_nContact" not in y_df.columns or "p_trans" not in y_df.columns:
+            raise ValueError(
+                "Both 'mean_nContact' and 'p_trans' must be in the dataset."
+            )
+        y_df["infectivity"] = y_df["mean_nContact"] * y_df["p_trans"]
+        y_df.drop(columns=["mean_nContact", "p_trans"], inplace=True)
+
+        # Reorder columns
+        y_df = y_df[[
+            "mean_t_incub",
+            "stdv_t_incub",
+            "infectivity",
+            "p_fatal",
+            "t_recovery"
+        ]]
 
     transformed_indices = []
     if target_transforms:
