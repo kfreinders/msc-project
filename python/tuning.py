@@ -159,7 +159,7 @@ def main() -> None:
 
     # Load data
     logger.info("Loading dataset...")
-    dataset = load_data("data/nosoi/merged.csv")
+    dataset, _ = load_data("data/nosoi/merged.csv")
 
     # Define the hyperparameter and architecture search space
     search_space: dict[str, list[float]] = {

@@ -82,7 +82,7 @@ def main() -> None:
         patience=5,
     )
 
-    # # Save the trained model
+    # Save the trained model
     os.makedirs("data/dnn", exist_ok=True)
     torch.save(model.state_dict(), "data/dnn/regressor.pt")
     logger.info("Model saved to 'data/dnn/regressor.pt'.")
