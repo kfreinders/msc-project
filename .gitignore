@@ -5,3 +5,4 @@ data/
 *.err
 python/__pycache__
 .mypy_cache/
+logs
