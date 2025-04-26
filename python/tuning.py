@@ -205,7 +205,7 @@ def main() -> None:
         logger.info(
             f"Training configuration {idx}/{len(hyperparameter_combinations)}"
         )
-        logger.debug(f"Configuration details: {config}")
+        logger.info(f"Configuration details: {config}")
 
         # Create dataloaders with specified batch size
         train, val = build_dataloaders(dataset, config["batch_size"])
@@ -219,7 +219,7 @@ def main() -> None:
         )
 
         # Save the config and its performance
-        logger.debug(
+        logger.info(
             f"Final validation loss for current config: {final_val_loss:.4f}"
         )
         results.append((config, final_val_loss))
