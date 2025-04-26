@@ -150,7 +150,7 @@ def train_and_evaluate(
 
 def main() -> None:
     # Set up logger
-    setup_logging()
+    setup_logging("tuning")
     logger = logging.getLogger(__name__)
 
     # Use CUDA if available

@@ -32,7 +32,7 @@ def sqrt_transform(x: np.ndarray) -> np.ndarray:
 
 def main() -> None:
     # Set up logger
-    setup_logging()
+    setup_logging("training")
     logger = logging.getLogger(__name__)
 
     # Use CUDA if available

@@ -8,14 +8,12 @@ from typing import Callable, Optional
 from torch.utils.data import DataLoader, Subset, TensorDataset, random_split
 from sklearn.preprocessing import StandardScaler
 import logging
-from logging_config import setup_logging
 
 # -----------------------------------------------------------------------------
 #  Configure logging
 # -----------------------------------------------------------------------------
 
 # Set up logger
-setup_logging()
 logger = logging.getLogger(__name__)
 
 
