@@ -8,32 +8,32 @@ initialize_db <- function(db_name) {
   invisible(dbExecute(db,"
     CREATE TABLE IF NOT EXISTS summary_stats (
       seed INTEGER PRIMARY KEY,
-      SS_00 REAL,
-      SS_01 REAL,
-      SS_02 REAL,
-      SS_03 REAL,
-      SS_04 REAL,
-      SS_05 REAL,
-      SS_06 REAL,
-      SS_07 REAL,
-      SS_08 REAL,
-      SS_09 REAL,
-      SS_10 REAL,
-      SS_11 REAL,
-      SS_12 REAL,
-      SS_13 REAL,
-      SS_14 REAL,
-      SS_15 REAL,
-      SS_16 REAL,
-      SS_17 REAL,
-      SS_18 REAL,
-      SS_19 REAL,
-      SS_20 REAL,
-      SS_21 REAL,
-      SS_22 REAL,
-      SS_23 REAL,
-      SS_24 REAL,
-      SS_25 REAL
+      ss_noninf REAL
+      ss_mean_secinf REAL
+      ss_med_secinf REAL
+      ss_var_secinf REAL
+      ss_fractop50 REAL
+      ss_hostspertime REAL
+      ss_mean_inftime REAL
+      ss_med_inftime REAL
+      ss_var_inftime REAL
+      ss_prop_infectors REAL
+      ss_active_final REAL
+      ss_hosts_total REAL
+      ss_frac_active_final REAL
+      ss_mean_inflag REAL
+      ss_min_inflag REAL
+      ss_med_inflag REAL
+      ss_var_inflag REAL
+      ss_frac_runtime REAL
+      ss_g_degree REAL
+      ss_g_clustcoef REAL
+      ss_g_density REAL
+      ss_g_diam REAL
+      ss_g_meanego REAL
+      ss_g_radius REAL
+      ss_g_meanalpha REAL
+      ss_g_effglob REAL
     )
   "))
   dbDisconnect(db) 
@@ -70,6 +70,7 @@ write_summary_statistics <- function(db, seed, summary_stats) {
     return(TRUE)
     }, error = function(e) {
       if (grepl("database is locked", e$message)) {
+        # FIXME: fixed time and make backoff actually exponential
         Sys.sleep(runif(1, 0.1, 0.5) * attempt)  # Exponential backoff
         attempt <- attempt + 1
       } else {
