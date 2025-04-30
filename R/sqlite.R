@@ -34,6 +34,12 @@ initialize_db <- function(db_name) {
       ss_g_radius REAL
       ss_g_meanalpha REAL
       ss_g_effglob REAL
+      ss_deaths REAL
+      ss_mean_deaths REAL
+      ss_mean_ttd REAL
+      ss_med_ttd REAL
+      ss_var_ttd REAL
+      ss_death_recov_ratio REAL
     )
   "))
   dbDisconnect(db) 

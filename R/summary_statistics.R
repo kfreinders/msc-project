@@ -84,6 +84,31 @@ compute_summary_statistics <- function(SimulationSingle, nosoi_settings) {
   ss_g_meanalpha <- safe_mean(alpha_centrality(graph))      # Network mean alpha centrality
   ss_g_effglob <- global_efficiency(graph)                  # Network global efficiency
 
+  # Mortality-related statistics from host fate
+  if ("fate" %in% colnames(All_Data_A)) {
+    # Mapping:
+    #   0 -> still active
+    #   1 -> deceased
+    #   2 -> recovered
+    death_mask <- All_Data_A$fate == 1
+    recovery_mask <- All_Data_A$fate == 2
+
+    time_to_death <- All_Data_A$out.time[death_mask] - All_Data_A$inf.time[death_mask]
+
+    ss_deaths <- sum(death_mask)                            # Total no. deaths
+    ss_mean_deaths <- safe_mean(death_mask)                 # Proportion of hosts that died
+    ss_mean_ttd <- safe_mean(time_to_death)                 # Mean time to death
+    ss_med_ttd <- safe_median(time_to_death)                # Median time to death
+    ss_var_ttd <- safe_var(time_to_death)                   # Variance of time to death
+    ss_death_recov_ratio <- ifelse(
+      sum(recovery_mask) != 0,
+      ss_deaths / sum(recovery_mask),                       # Death-to-recovery ratio
+      NA
+    )
+  } else {
+    ss_deaths <- ss_mean_deaths <- ss_mean_ttd <- ss_med_ttd <- ss_var_ttd <- ss_death_recov_ratio <- NA
+  }
+
   # Return all summary statistics in a df
   summary_stats <- data.frame(
     ss_noninf, ss_mean_secinf, ss_med_secinf, ss_var_secinf, ss_fractop50,
@@ -91,7 +116,8 @@ compute_summary_statistics <- function(SimulationSingle, nosoi_settings) {
     ss_prop_infectors, ss_active_final, ss_hosts_total, ss_frac_active_final,
     ss_mean_inflag, ss_min_inflag, ss_med_inflag, ss_var_inflag,
     ss_frac_runtime, ss_g_degree, ss_g_clustcoef, ss_g_density, ss_g_diam,
-    ss_g_meanego, ss_g_radius, ss_g_meanalpha, ss_g_effglob
+    ss_g_meanego, ss_g_radius, ss_g_meanalpha, ss_g_effglob, ss_deaths,
+    ss_mean_deaths, ss_mean_ttd, ss_med_ttd, ss_var_ttd, ss_death_recov_ratio
   )
 
   return(summary_stats)
