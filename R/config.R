@@ -6,12 +6,12 @@ nosoi_settings <- list(
 )
 
 param_bounds <- list(
-  mean_t_incub  = c(2, 21),
-  stdv_t_incub  = c(1, 4),
-  mean_nContact = c(0.1, 5),
-  p_trans       = c(0.01, 1),
-  p_fatal       = c(0.01, 0.5),
-  t_recovery    = c(10, 30)
+  mean_t_incub    = c(2, 21),
+  stdv_t_incub    = c(1, 4),
+  mean_nContact   = c(0.1, 5),
+  p_trans         = c(0.01, 1),
+  p_fatal         = c(0.01, 0.5),
+  mean_t_recovery = c(10, 30)
 )
 
 output_folder         <- "data/nosoi"
