@@ -30,11 +30,11 @@ create_worker <- function(db_name, output_folder, nosoi_settings) {
       hosts_table <- getTableHosts(sim_result)
       
       if (!is.null(hosts_table) && nrow(hosts_table) > 0) {
-        # Compute summary statistics
-        summary_statistics <- compute_summary_statistics(sim_result, nosoi_settings)
-
         # Assign host fates
         hosts_table <- determine_fate(hosts_table)
+
+        # Compute summary statistics
+        summary_statistics <- compute_summary_statistics(sim_result, nosoi_settings)
 
         # Save the infection table to a Parquet file
         save_inftable_compressed(hosts_table, output_folder, seed)
