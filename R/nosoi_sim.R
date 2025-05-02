@@ -12,7 +12,7 @@ create_tIncubFunc <- function(mean_tIncub, stdv_tIncub) {
 # Funcion factory: recovery time
 create_tRecoveryFunc <- function(mean_tRecovery) {
   function(t) {
-    return(rtruncnorm(1, a = 2, mean = mean_tRecovery, sd = 1))
+    return(rtruncnorm(1, a = 2, mean = mean_tRecovery, sd = 2))
   }
 }
 
