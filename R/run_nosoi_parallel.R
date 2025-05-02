@@ -32,8 +32,12 @@ create_worker <- function(db_name, output_folder, nosoi_settings) {
       if (!is.null(hosts_table) && nrow(hosts_table) > 0) {
         # Compute summary statistics
         summary_statistics <- compute_summary_statistics(sim_result, nosoi_settings)
+
+        # Assign host fates
+        hosts_table <- determine_fate(hosts_table)
+
         # Save the infection table to a Parquet file
-        output_file <- save_inftable_compressed(hosts_table, output_folder, seed)
+        save_inftable_compressed(hosts_table, output_folder, seed)
         
         end_time <- Sys.time()  # End timing
         elapsed_time <- round(difftime(end_time, start_time, units = "secs"), 2)

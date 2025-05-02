@@ -259,16 +259,19 @@ print_run_summary <- function(
 #   1 -> deceased
 #   2 -> recovered
 
-determine_fate <- function(df, p_fatal) {
+determine_fate <- function(df) {
   df$fate <- NA  # Initialize fate column
 
-  # Condition for recovered individuals
-  df$fate[df$out.time >= df$inf.time + df$tIncub + 20] <- 2
+  # Compute individual recovery thresholds
+  recovery_threshold <- df$inf.time + df$tIncub + df$tRecov + runif(nrow(df), min = 0, max = 1)
 
-  # Condition for deceased individuals
-  df$fate[df$out.time < df$inf.time + df$tIncub + 20 & !is.na(df$out.time)] <- 1
+  # Recovered: survived beyond recovery threshold
+  df$fate[df$out.time >= recovery_threshold] <- 2
 
-  # Individuals still active at the end of the simulation
+  # Deceased: exited before recovery threshold
+  df$fate[df$out.time < recovery_threshold & !is.na(df$out.time)] <- 1
+
+  # Still active at end of simulation
   df$fate[is.na(df$out.time)] <- 0
 
   return(df)
