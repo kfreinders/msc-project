@@ -330,7 +330,7 @@ sort_replace_datatypes <- function(df) {
 # structure, allowing us to drop the `hosts.ID` column to reduce the file size.
 # ------------------------------------------------------------------------------
   
-save_inftable_compressed <- function(df, output_folder, seed) {
+save_inftable_compressed <- function(df, output_folder, seed, simtime) {
   # Sort the df and use more efficient data types
   df <- sort_replace_datatypes(df)
 
@@ -349,9 +349,15 @@ save_inftable_compressed <- function(df, output_folder, seed) {
   # redundant
   df$active <- NULL  
 
-  # Save as Parquet
+  # Convert metadata to schema
+  table <- Table$create(df)
+  metadata <- list(simtime = as.character(simtime))
+  schema <- table$schema$WithMetadata(metadata)
+  table <- table$cast(schema)
+
+  # Save as Parquet with metadata
   filename <- paste0("inftable_", formatted_seed, "_mapped.parquet")
-  write_parquet(df, file.path(output_folder, filename))
+  write_parquet(table, file.path(output_folder, filename))
 
   # Debugging: write as reconstructed CSV also
   # rec <- reconstruct_hosts_ID(df)

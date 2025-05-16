@@ -40,7 +40,7 @@ create_worker <- function(db_name, output_folder, nosoi_settings) {
         )
 
         # Save the infection table to a Parquet file
-        save_inftable_compressed(hosts_table, output_folder, seed)
+        save_inftable_compressed(hosts_table, output_folder, seed, simtime)
         
         end_time <- Sys.time()  # End timing
         elapsed_time <- round(difftime(end_time, start_time, units = "secs"), 2)
