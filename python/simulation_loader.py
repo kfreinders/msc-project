@@ -1,3 +1,4 @@
+import networkx as nx
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
@@ -55,7 +56,35 @@ def reconstruct_hosts_ID(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def load_simulation(parquet_path: str) -> tuple[pd.DataFrame, dict[str, str]]:
+def df_to_nx_graph(df: pd.DataFrame) -> nx.DiGraph:
+    """
+    Convert a reconstructed transmission chain to a directed NetworkX graph.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        A DataFrame with columns `hosts.ID`, `inf.by`, and metadata columns.
+
+    Returns
+    -------
+    nx.DiGraph
+        A directed graph where nodes represent hosts and edges represent
+        infection events.
+    """
+    graph = nx.DiGraph()
+
+    for _, row in df.iterrows():
+        node_id = row["hosts.ID"]
+        graph.add_node(node_id, **row.to_dict())
+        if pd.notna(row["inf.by"]):
+            graph.add_edge(int(row["inf.by"]), node_id)
+
+    return graph
+
+
+def load_simulation(
+    parquet_path: str, as_graph: bool = False
+) -> tuple[pd.DataFrame | nx.DiGraph, dict[str, str]]:
     """
     Load a nosoi simulation from a Parquet file.
 
@@ -67,17 +96,21 @@ def load_simulation(parquet_path: str) -> tuple[pd.DataFrame, dict[str, str]]:
     ----------
     parquet_path : str
         Path to the Parquet file containing the simulation data.
+    as_graph : bool
+        Optional flag to return the transmission chain as a NetworkX directed
+        graph instad of a pandas DataFrame.
 
     Returns
     -------
     tuple[pd.DataFrame, dict[str, str]]
         A tuple where the first element is the reconstructed transmission chain
-        as a pandas DataFrame, and the second is a dictionary of decoded
-        metadata stored in the file schema.
+        as a pandas DataFrame or NetworkX graph, and the second is a dictionary
+        of decoded metadata stored in the file schema.
     """
     # Convert the parquet table to pandas df
     table = pq.read_table(parquet_path)
     df = table.to_pandas()
+    reconstructed = reconstruct_hosts_ID(df)
 
     # Also extract metadata
     schema = table.schema
@@ -85,4 +118,4 @@ def load_simulation(parquet_path: str) -> tuple[pd.DataFrame, dict[str, str]]:
     decoded = {k.decode(): v.decode() for k, v in metadata.items()}
 
     # Return reconstructed transmission chain
-    return reconstruct_hosts_ID(df), decoded
+    return (reconstructed if not as_graph else df_to_nx_graph(df)), decoded
