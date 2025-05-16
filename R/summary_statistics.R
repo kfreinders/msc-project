@@ -18,7 +18,7 @@ safe_var <- function(x, default = 0) {
 # Compute Summary Statistics                                                   #
 #------------------------------------------------------------------------------#
 
-compute_summary_statistics <- function(sim_result, hosts_table, nosoi_settings) {
+compute_summary_statistics <- function(hosts_table, nosoi_settings, simtime) {
   # Basic Statistics
   ss_noninf <- sum(!hosts_table$hosts.ID %in% hosts_table$inf.by)  # Number of non-infecting hosts
   frequency_table <- table(hosts_table$inf.by)
@@ -33,7 +33,7 @@ compute_summary_statistics <- function(sim_result, hosts_table, nosoi_settings) 
   result_table$Cumulative <- cumsum(result_table$Frequency)
   ss_fractop50 <- which(result_table$Cumulative >= (0.5 * sum(result_table$Frequency)))[1] / length(result_table$Frequency)
 
-  ss_hostspertime <- length(hosts_table$hosts.ID) / sim_result$total.time  # Hosts per time
+  ss_hostspertime <- length(hosts_table$hosts.ID) / simtime  # Hosts per time
 
   # Infection Time Statistics
   inf_time <- hosts_table$out.time - hosts_table$inf.time
@@ -54,12 +54,12 @@ compute_summary_statistics <- function(sim_result, hosts_table, nosoi_settings) 
   result_td$inf_time_diff <- result_td$inf.time - result_td$inf.time_infected_by
   result_td <- result_td[, c("hosts.ID", "inf.by", "inf.time", "inf.time_infected_by", "inf_time_diff")]
 
-  ss_mean_inflag <- safe_mean(result_td$inf_time_diff, sim_result$total.time + 1)
-  ss_min_inflag <- ifelse(nrow(result_td) <= 1, sim_result$total.time + 1, min(aggregate(inf_time_diff ~ inf.by, result_td, min)$inf_time_diff))
+  ss_mean_inflag <- safe_mean(result_td$inf_time_diff, simtime + 1)
+  ss_min_inflag <- ifelse(nrow(result_td) <= 1, simtime + 1, min(aggregate(inf_time_diff ~ inf.by, result_td, min)$inf_time_diff))
   ss_med_inflag <- safe_median(result_td$inf_time_diff)
   ss_var_inflag <- safe_var(result_td$inf_time_diff)
 
-  ss_frac_runtime <- sim_result$total.time / nosoi_settings$length  # Ratio of simulation run time to max time
+  ss_frac_runtime <- simtime / nosoi_settings$length  # Ratio of simulation run time to max time
 
   # Network Structure Analysis
   edges <- hosts_table[, c("inf.by", "hosts.ID")]
