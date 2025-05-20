@@ -209,11 +209,14 @@ def split_data(
     dataset: torch.utils.data.TensorDataset,
     ptrain: float,
     pval: float,
-    ptest: float,
     batch_size: int = 64,
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """
     Split a dataset into training, validation, and testing sets.
+
+    The test set proportion is computed as the remainder: 1.0 - ptrain - pval
+    and is allowed to be zero, in case only training and validation datasets
+    are required.
 
     Parameters
     ----------
@@ -223,8 +226,6 @@ def split_data(
         Proportion of the dataset to use for training.
     pval : float
         Proportion of the dataset to use for validation.
-    ptest : float
-        Proportion of the dataset to use for testing.
     batch_size : int, optional
         Number of samples per batch (default is 64).
 
@@ -233,10 +234,12 @@ def split_data(
     tuple of torch.utils.data.DataLoader
         DataLoaders for training, validation, and testing datasets.
     """
-    total = ptrain + pval + ptest
-    if abs(total - 1.0) > 0.01:
+    if not (0 < ptrain < 1 and 0 < pval < 1):
+        raise ValueError("Proportions must be between 0 and 1 (exclusive).")
+
+    if ptrain + pval > 1.0:
         raise ValueError(
-            f"Split proportions must sum to 1.0 (got {total:.4f})"
+            f"ptrain + pval must be ≤ 1.0 (got {ptrain + pval:.4f})"
         )
 
     # Ensure that the split sizes always exactly sum up
@@ -244,6 +247,9 @@ def split_data(
     train_size = round(ptrain * n)
     val_size = round(pval * n)
     test_size = n - train_size - val_size
+
+    if test_size == 0:
+        logging.warning("Test set will be empty because ptrain + pval == 1.0")
 
     train_ds, val_ds, test_ds = random_split(
         dataset, [train_size, val_size, test_size]
@@ -261,7 +267,6 @@ def split_data_with_meta(
     meta: dict[str, np.ndarray],
     ptrain: float,
     pval: float,
-    ptest: float,
     batch_size: int = 64,
     seed: Optional[int] = None,
 ) -> tuple[
@@ -269,7 +274,11 @@ def split_data_with_meta(
     dict[str, np.ndarray], dict[str, np.ndarray], dict[str, np.ndarray]
 ]:
     """
-    Shuffle and split dataset and its associated metadata.
+    Split a dataset with metadata into training, validation, and testing sets.
+
+    The test set proportion is computed as the remainder: 1.0 - ptrain - pval
+    and is allowed to be zero, in case only training and validation datasets
+    are required.
 
     Parameters
     ----------
@@ -282,8 +291,6 @@ def split_data_with_meta(
         Proportion of samples used for training.
     pval : float
         Proportion used for validation.
-    ptest : float
-        Proportion used for testing.
     batch_size : int, optional
         Batch size for DataLoaders.
     seed : int, optional
@@ -296,35 +303,45 @@ def split_data_with_meta(
     train_meta, val_meta, test_meta : dict[str, np.ndarray]
         Sliced metadata dictionaries corresponding to each split.
     """
-    total = ptrain + pval + ptest
-    if abs(total - 1.0) > 0.01:
+    if not (0 < ptrain < 1 and 0 < pval < 1):
+        raise ValueError("Proportions must be between 0 and 1 (exclusive).")
+
+    if ptrain + pval > 1.0:
         raise ValueError(
-            f"Split proportions must sum to 1.0 (got {total:.4f})"
+            f"ptrain + pval must be ≤ 1.0 (got {ptrain + pval:.4f})"
         )
 
     n = len(dataset)
-    indices = np.arange(n)
+    if n != next(iter(meta.values())).shape[0]:
+        raise ValueError("Metadata arrays must match dataset length.")
 
+    # Shuffle indices
+    indices = np.arange(n)
     if seed is not None:
         g = torch.Generator().manual_seed(seed)
         indices = torch.randperm(n, generator=g).numpy()
     else:
         np.random.shuffle(indices)
 
-    # Split indices
+    # Compute split sizes
     train_size = round(ptrain * n)
     val_size = round(pval * n)
+    test_size = n - train_size - val_size
 
+    if test_size == 0:
+        logging.warning("Test set will be empty because ptrain + pval == 1.0")
+
+    # Split indices
     train_idx = indices[:train_size]
     val_idx = indices[train_size:train_size + val_size]
     test_idx = indices[train_size + val_size:]
 
-    # Split dataset
+    # Create Subsets
     train_ds = Subset(dataset, train_idx.tolist())
     val_ds = Subset(dataset, val_idx.tolist())
     test_ds = Subset(dataset, test_idx.tolist())
 
-    # Split meta
+    # Split metadata
     def slice_meta(idxs: np.ndarray) -> dict[str, np.ndarray]:
         return {k: v[idxs] for k, v in meta.items()}
 

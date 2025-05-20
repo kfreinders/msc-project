@@ -58,7 +58,7 @@ def build_dataloaders(
         Training and validation DataLoaders.
     """
     train, val, _ = split_data(
-        dataset, ptrain=0.8, pval=0.2, ptest=0.0, batch_size=batch_size
+        dataset, ptrain=0.7, pval=0.3, batch_size=batch_size
     )
     return train, val
 

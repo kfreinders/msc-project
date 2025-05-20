@@ -74,7 +74,6 @@ def main() -> None:
         meta,
         ptrain=0.7,
         pval=0.15,
-        ptest=1 - 0.7 - 0.15,
         batch_size=32
     )
 
