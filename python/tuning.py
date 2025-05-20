@@ -163,11 +163,11 @@ def main() -> None:
 
     # Define the hyperparameter and architecture search space
     search_space: dict[str, list[float]] = {
-        "learning_rate": [1e-3, 3e-4, 1e-4],
-        "hidden_size": [64, 128, 256],
-        "num_layers": [3, 4],
-        "dropout_rate": [0.1, 0.2],
-        "batch_size": [64, 128],
+        "learning_rate": [1e-2, 1e-3, 3e-4, 1e-4],
+        "hidden_size": [16, 32, 64, 128, 256],
+        "num_layers": [1, 2, 3, 4, 5],
+        "dropout_rate": [0.1, 0.2, 0.3],
+        "batch_size": [16, 32, 64, 128],
     }
 
     # Generate all possible combinations for a full grid search
