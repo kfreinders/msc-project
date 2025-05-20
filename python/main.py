@@ -69,7 +69,7 @@ def main() -> None:
     logger.info(
         "Splitting dataset into training, validation and testing sets..."
     )
-    train, val, test, _, val_meta, _ = split_data_with_meta(
+    train, val, test, _, _, test_meta = split_data_with_meta(
         dataset,
         meta,
         ptrain=0.7,
@@ -120,7 +120,7 @@ def main() -> None:
     model.to(device)
 
     # Predict
-    preds, trues = predict_nosoi_parameters(model, val, device)
+    preds, trues = predict_nosoi_parameters(model, test, device)
 
     # Apply inverse transform for plotting
     for i in log_idxs:
@@ -137,7 +137,7 @@ def main() -> None:
         "t_recovery",
     ]
 
-    fig = plot_predictions(preds, trues, param_names, val_meta["SS_11"])
+    fig = plot_predictions(preds, trues, param_names, test_meta["SS_11"])
     fig.savefig("predicted_vs_true.png", dpi=400, bbox_inches="tight")
 
 
