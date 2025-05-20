@@ -83,7 +83,7 @@ def main() -> None:
         input_dim=26,
         output_dim=5,
         hidden_size=256,
-        num_layers=4,
+        num_hidden_layers=4,
         dropout_rate=0.1
     ).to(device)
 

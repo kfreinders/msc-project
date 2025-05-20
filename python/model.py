@@ -18,8 +18,9 @@ class NeuralNetwork(nn.Module):
         Dimension of the output predictions.
     hidden_size : int, optional
         Number of neurons in each hidden layer (default is 128).
-    num_layers : int, optional
-        Total number of layers including the first hidden layer (default is 3).
+    num_hidden_layers : int, optional
+        Number of fully connected layers between the input and output layers
+        (default is 3).
     dropout_rate : float, optional
         Dropout probability applied after each hidden layer (default is 0.2).
 
@@ -38,23 +39,19 @@ class NeuralNetwork(nn.Module):
         input_dim,
         output_dim,
         hidden_size=128,
-        num_layers=3,
+        num_hidden_layers=3,
         dropout_rate=0.2
     ):
         super(NeuralNetwork, self).__init__()
 
         layers = []
-        layers.append(nn.Linear(input_dim, hidden_size))
-        layers.append(nn.ReLU())
-        layers.append(nn.Dropout(dropout_rate))
-
-        # Final use num_layers - 1 hidden layers
-        for _ in range(num_layers - 1):
-            layers.append(nn.Linear(hidden_size, hidden_size))
+        for i in range(num_hidden_layers):
+            in_dim = input_dim if i == 0 else hidden_size
+            layers.append(nn.Linear(in_dim, hidden_size))
             layers.append(nn.ReLU())
             layers.append(nn.Dropout(dropout_rate))
 
-        # Final output layer
+        # Output layer
         layers.append(nn.Linear(hidden_size, output_dim))
 
         self.net = nn.Sequential(*layers)

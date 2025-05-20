@@ -91,7 +91,7 @@ def build_model(config: dict, device: torch.device) -> torch.nn.Module:
         input_dim=26,
         output_dim=6,
         hidden_size=config["hidden_size"],
-        num_layers=config["num_layers"],
+        num_hidden_layers=config["num_layers"],
         dropout_rate=config["dropout_rate"],
     )
     return model.to(device)
