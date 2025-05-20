@@ -501,7 +501,7 @@ def evaluate_model(
 
 # Disable gradient calculation (important for inference only, saves memory)
 @torch.no_grad()
-def predict_parameters(
+def predict_nosoi_parameters(
     model: torch.nn.Module,
     loader: torch.utils.data.DataLoader,
     device: torch.device,

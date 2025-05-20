@@ -11,7 +11,7 @@ from utils import (
     split_data_with_meta,
     merge_summary_and_parameters,
     train_model,
-    predict_parameters,
+    predict_nosoi_parameters,
     plot_predictions,
 )
 
@@ -120,7 +120,7 @@ def main() -> None:
     model.to(device)
 
     # Predict
-    preds, trues = predict_parameters(model, val, device)
+    preds, trues = predict_nosoi_parameters(model, val, device)
 
     # Apply inverse transform for plotting
     for i in log_idxs:
