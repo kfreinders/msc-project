@@ -1,6 +1,7 @@
 from typing import Callable, Optional
 import pandas as pd
 import logging
+import numpy as np
 
 
 # Set up logger
@@ -28,6 +29,24 @@ class NosoiDataManager:
 
         # Automatically load and merge data
         self._join_master_and_summary()
+
+    @property
+    def x(self) -> np.ndarray:
+        """
+        Return the input features (SST_* columns) as a NumPy array.
+        """
+        self._assert_data_loaded()
+        sst_cols = [col for col in self.df.columns if col.startswith("SST_")]
+        return self.df[sst_cols].to_numpy()
+
+    @property
+    def y(self) -> np.ndarray:
+        """
+        Return the target variables (PAR_* columns) as a NumPy array.
+        """
+        self._assert_data_loaded()
+        par_cols = [col for col in self.df.columns if col.startswith("PAR_")]
+        return self.df[par_cols].to_numpy()
 
     # TODO: add docstring explanation of the protected prefixes and raw copy
     def _join_master_and_summary(self) -> None:
