@@ -39,6 +39,11 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
+    # Which transforms to apply to the data for training
+    transform_map = {
+        "PAR_p_fatal": log_transform
+    }
+
     manager = NosoiDataManager(
         "data/nosoi/summary_stats_export.csv",
         "data/nosoi/master.csv"
@@ -49,13 +54,13 @@ def main() -> None:
     # the nosoi parameters
     manager.drop_by_filter(lambda df: df["SST_11"] > 2000, "SST_11 > 2000")
 
-    # Which transforms to apply to the data for training
-    transform_map = {
-        "p_fatal": log_transform
-    }
     # Replace mean_nContact and p_trans by their product, which is the
     # infectivity.
     manager.apply_infectivity()
+
+    # Apply transforms to data. Currently, only predictions of p_fatal benefit
+    # from a log transform but do so significantly
+    manager.apply_target_transforms(transform_map)
 
     dataset, meta, log_idxs = load_data(
         "data/nosoi/merged.csv",

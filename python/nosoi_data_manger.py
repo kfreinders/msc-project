@@ -23,6 +23,9 @@ class NosoiDataManager:
         # Core dataframe
         self.df: pd.DataFrame
 
+        # Keep track of which column are transformed and how
+        self.transformed_cols: dict[str, Callable] = {}
+
         # Automatically load and merge data
         self._join_master_and_summary()
 
@@ -160,3 +163,34 @@ class NosoiDataManager:
         # Include columns not specified in `order`
         remaining = [col for col in self.df.columns if col not in order]
         self.df = self.df[order + remaining]
+
+    def apply_target_transforms(self, transforms: dict[str, Callable]) -> None:
+        """
+        Apply column-wise transformations (e.g., log, sqrt) to target columns.
+
+        The transformations are stored in `self.transformed_cols` for reference
+        or downstream inverse application.
+
+        Parameters
+        ----------
+        transforms : dict[str, Callable]
+            Dictionary mapping column names to transformation functions to
+            apply. For example: {"p_fatal": np.log, "t_recovery": np.sqrt}
+
+        Raises
+        ------
+        ValueError
+            If a specified column is missing in the DataFrame.
+        """
+        self._assert_data_loaded()
+
+        self.transformed_cols = {}
+        for col, fn in transforms.items():
+            if col not in self.df.columns:
+                raise ValueError(
+                    f"Target column '{col}' not found in merged dataset."
+                )
+
+            logger.debug(f"Applying {fn.__name__} to '{col}'")
+            self.df[col] = fn(self.df[col].to_numpy(copy=True))
+            self.transformed_cols[col] = fn
