@@ -9,11 +9,11 @@ from utils import (
     evaluate_model,
     load_data,
     split_data_with_meta,
-    merge_summary_and_parameters,
     train_model,
     predict_nosoi_parameters,
     plot_predictions,
 )
+from nosoi_data_manger import NosoiDataManager
 
 
 def log_transform(x: np.ndarray) -> np.ndarray:
@@ -39,14 +39,9 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
-    # Merge summary statistic and nosoi parameter files
-    logger.info("Merging summary statistic and nosoi parameter files...")
-    merge_summary_and_parameters(
+    manager = NosoiDataManager(
         "data/nosoi/summary_stats_export.csv",
-        "data/nosoi/master.csv",
-        "data/nosoi/merged.csv",
-        filter_fn=lambda df: df["SS_11"] > 2000,
-        filter_fn_desc="SS_11 > 2000"
+        "data/nosoi/master.csv"
     )
 
     # Read the merged csv file and also retrieve summary statistic 11, which is
