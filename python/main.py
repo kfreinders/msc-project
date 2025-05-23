@@ -44,9 +44,10 @@ def main() -> None:
         "data/nosoi/master.csv"
     )
 
-    # Read the merged csv file and also retrieve summary statistic 11, which is
-    # the total no. hosts at the end of the simulation.
-    logger.info("Generating dataset from csv...")
+    # Drop simulations with less than 2000 individuals. Below this size,
+    # transmission chains seem to not have enough signal for the DNN to infer
+    # the nosoi parameters
+    manager.drop_by_filter(lambda df: df["SST_11"] > 2000, "SST_11 > 2000")
 
     # Which transforms to apply to the data for training
     transform_map = {
