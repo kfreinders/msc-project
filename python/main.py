@@ -112,6 +112,7 @@ def main() -> None:
     )
 
     # Save the trained model
+    # TODO: save existing regressor.pt as "regressor-n.pt" and save current
     os.makedirs("data/dnn", exist_ok=True)
     torch.save(model.state_dict(), "data/dnn/regressor.pt")
     logger.info("Model saved to 'data/dnn/regressor.pt'.")
@@ -127,6 +128,7 @@ def main() -> None:
     model.to(device)
 
     # Predict
+    # TODO: write preds and trues for later usage
     preds, trues = predict_nosoi_parameters(model, test, device)
 
     # Apply inverse transform for plotting
@@ -144,6 +146,10 @@ def main() -> None:
         "t_recovery",
     ]
 
+    # TODO: also add a plot of model trained to predict mean_nContact and
+    p_trans instead of infectivity, and plot both the predictions for these
+    as well as their product (which is the infectivity)
+    # TODO: extract this functionality
     fig = plot_predictions(preds, trues, param_names, test_meta["SS_11"])
     fig.savefig("predicted_vs_true.png", dpi=400, bbox_inches="tight")
 

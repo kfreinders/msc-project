@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.figure
 import numpy as np
-import numpy.typing as npt
 import pandas as pd
 import torch
 from typing import Callable, Optional
@@ -355,6 +354,8 @@ def split_data_with_meta(
     )
 
 
+# TODO: implement patience tuning: optimize tradeoff between loss gain and
+# waiting longer because of higher patience settings.
 def train_model(
     model: torch.nn.Module,
     train_loader: torch.utils.data.DataLoader,

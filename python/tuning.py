@@ -36,6 +36,10 @@ def generate_paramsets(params: dict[str, list[float]]) -> list[dict]:
     return combinations
 
 
+# FIXME: use the exact same data split in each tuning iteration, as otherwise
+# model performance may vary depending on which data it gets in each iteration
+# FIXME: use the same training and validation splits as is used for training
+# the model, since
 def build_dataloaders(
         dataset: torch.utils.data.TensorDataset, batch_size: int
 ) -> tuple[DataLoader, DataLoader]:
@@ -176,6 +180,8 @@ def main() -> None:
         f"Total configurations to try: {len(hyperparameter_combinations)}"
     )
 
+    # TODO: more intelligent resuming logic
+
     # Try to resume from existing results
     results = []
     try:
@@ -190,6 +196,10 @@ def main() -> None:
 
     # Build set of already tried configurations
     tried_configs = {json.dumps(r[0], sort_keys=True) for r in results}
+
+    # FIXME: if there are .json files from a previous run, the script should
+    # be aware that this is a new run. Currently, it might cause issues with
+    # resuming logic.
 
     # Start full grid search
     for idx, config in enumerate(hyperparameter_combinations, start=1):
