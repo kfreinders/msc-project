@@ -53,6 +53,9 @@ def main() -> None:
     transform_map = {
         "p_fatal": log_transform
     }
+    # Replace mean_nContact and p_trans by their product, which is the
+    # infectivity.
+    manager.apply_infectivity()
 
     dataset, meta, log_idxs = load_data(
         "data/nosoi/merged.csv",

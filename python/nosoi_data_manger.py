@@ -107,3 +107,56 @@ class NosoiDataManager:
         # Print filter function description for logging purposes
         if filter_fn_desc is not None:
             logger.info(f"Row filtering condition: {filter_fn_desc}")
+
+    def apply_infectivity(self) -> None:
+        """
+        Replace 'mean_nContact' and 'p_trans' with their product: infectivity.
+
+        This method computes a new column 'infectivity' as the product of
+        mean_nContact and p_trans, drops the originals, and reorders the
+        resulting columns for consistency.
+
+        Raises
+        ------
+        ValueError
+            If 'infectivity' already exists, indicating it has already
+            been applied.
+        ValueError
+            If either 'mean_nContact' or 'p_trans' is missing from the dataset.
+        """
+        self._assert_data_loaded()
+
+        # Ensure infectivity is not already in the dataset
+        if "PAR_infectivity" in self.df.columns:
+            raise ValueError(
+                "Column 'PAR_infectivity' already exists in df_merged."
+            )
+
+        # Ensure both mean_nContact and p_trans are present
+        if {"PAR_mean_nContact", "PAR_p_trans"} - set(self.df.columns):
+            raise ValueError(
+                "Both 'PAR_mean_nContact' and 'PAR_p_trans' must be in the"
+                "dataset."
+            )
+
+        logger.info("Applying infectivity (mean_nContact x p_trans)...")
+
+        self.df["PAR_infectivity"] = (
+            self.df["PAR_mean_nContact"] * self.df["PAR_p_trans"]
+        )
+        self.df.drop(
+            columns=["PAR_mean_nContact", "PAR_p_trans"], inplace=True
+        )
+
+        # Keep column order consistent
+        order = [
+            "PAR_mean_t_incub",
+            "PAR_stdv_t_incub",
+            "PAR_infectivity",
+            "PAR_p_fatal",
+            "PAR_t_recovery"
+        ]
+
+        # Include columns not specified in `order`
+        remaining = [col for col in self.df.columns if col not in order]
+        self.df = self.df[order + remaining]
