@@ -1,5 +1,8 @@
 from typing import Callable, Optional
 import pandas as pd
+import torch
+from torch.utils.data import TensorDataset
+from sklearn.preprocessing import StandardScaler
 import logging
 import numpy as np
 
@@ -213,3 +216,40 @@ class NosoiDataManager:
             logger.debug(f"Applying {fn.__name__} to '{col}'")
             self.df[col] = fn(self.df[col].to_numpy(copy=True))
             self.transformed_cols[col] = fn
+
+    def load_data(self) -> TensorDataset:
+        """
+        Convert the internal DataFrame into a PyTorch TensorDataset.
+
+        This method extracts columns prefixed with "SST_" as input features and
+        "PAR_" as target outputs from the internally stored DataFrame. The
+        features are normalized using sklearn's StandardScaler, and the
+        resulting tensors are returned in a TensorDataset.
+
+        Returns
+        -------
+        dataset : torch.utils.data.TensorDataset
+            A dataset containing normalized summary statistics as input
+            features and simulation parameters as output targets.
+
+        Raises
+        ------
+        RuntimeError
+            If the internal DataFrame is not loaded or empty.
+        ValueError
+            If no SST_ or PAR_ columns are found in the DataFrame.
+        """
+        self._assert_data_loaded()
+
+        X = self.x
+        y = self.y
+
+        if X.size == 0 or y.size == 0:
+            raise ValueError("SST_ or PAR_ columns are missing or empty.")
+
+        X_scaled = StandardScaler().fit_transform(X)
+
+        return TensorDataset(
+            torch.tensor(X_scaled, dtype=torch.float32),
+            torch.tensor(y, dtype=torch.float32)
+        )
