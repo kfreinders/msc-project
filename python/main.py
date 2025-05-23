@@ -69,11 +69,9 @@ def main() -> None:
         use_infectivity=True
     )
 
-    # Get input and output data dimensions from the dataset
-    input_dim = dataset[0][0].shape[0]   # First sample’s input tensor shape
-    output_dim = dataset[0][1].shape[0]  # First sample’s target tensor shape
     logger.info(
-        f"DNN model will have {input_dim} inputs and {output_dim} outputs"
+        f"DNN model will have {manager.input_dim} inputs and "
+        f"{manager.output_dim} outputs"
     )
 
     # Split dataset into training, validation and testing sets
@@ -91,8 +89,8 @@ def main() -> None:
     # Initialize model
     logger.info("Initializing model...")
     model = NeuralNetwork(
-        input_dim=input_dim,
-        output_dim=output_dim,
+        input_dim=manager.input_dim,
+        output_dim=manager.output_dim,
         hidden_size=256,
         num_hidden_layers=4,
         dropout_rate=0.1

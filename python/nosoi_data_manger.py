@@ -51,6 +51,20 @@ class NosoiDataManager:
         par_cols = [col for col in self.df.columns if col.startswith("PAR_")]
         return self.df[par_cols].to_numpy()
 
+    @property
+    def input_dim(self) -> int:
+        """
+        Return the number of input features (columns starting with 'SST_').
+        """
+        return self.x.shape[1]
+
+    @property
+    def output_dim(self) -> int:
+        """
+        Return the number of target parameters (columns starting with 'PAR_').
+        """
+        return self.y.shape[1]
+
     # TODO: add docstring explanation of the protected prefixes and raw copy
     def _join_master_and_summary(self) -> None:
         """
