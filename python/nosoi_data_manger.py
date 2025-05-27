@@ -43,6 +43,15 @@ class NosoiDataManager:
         return self.df[sst_cols].to_numpy()
 
     @property
+    def x_raw(self) -> np.ndarray:
+        """Return raw input features (RAW_SST_ columns) as a NumPy Array."""
+        self._assert_data_loaded()
+        raw_cols = [
+            col for col in self.df.columns if col.startswith("RAW_SST_")
+        ]
+        return self.df[raw_cols].to_numpy()
+
+    @property
     def y(self) -> np.ndarray:
         """
         Return the target variables (PAR_* columns) as a NumPy array.
@@ -50,6 +59,15 @@ class NosoiDataManager:
         self._assert_data_loaded()
         par_cols = [col for col in self.df.columns if col.startswith("PAR_")]
         return self.df[par_cols].to_numpy()
+
+    @property
+    def y_raw(self) -> np.ndarray:
+        """Return raw target parameters (RAW_PAR_ columns) as a NumPy Array."""
+        self._assert_data_loaded()
+        raw_cols = [
+            col for col in self.df.columns if col.startswith("RAW_PAR_")
+        ]
+        return self.df[raw_cols].to_numpy()
 
     @property
     def input_dim(self) -> int:
