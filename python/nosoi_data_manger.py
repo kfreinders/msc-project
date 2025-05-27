@@ -67,6 +67,7 @@ class NosoiSplit:
         return cls(X, y, raw["x_raw"], raw["y_raw"])
 
 
+class NosoiDataProcessor:
     """
     Manages loading, merging, filtering, and transforming data for nosoi
     simulations.
@@ -343,3 +344,103 @@ class NosoiSplit:
             torch.tensor(X_scaled, dtype=torch.float32),
             torch.tensor(y, dtype=torch.float32)
         )
+
+    @staticmethod
+    def _generate_split_indices(
+            n: int,
+            ptrain: float,
+            pval: float,
+            seed: Optional[int] = None
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        indices = np.arange(n)
+        if seed is not None:
+            g = torch.Generator().manual_seed(seed)
+            indices = torch.randperm(n, generator=g).numpy()
+        else:
+            np.random.shuffle(indices)
+
+        train_size = round(ptrain * n)
+        val_size = round(pval * n)
+
+        return (
+            indices[:train_size],
+            indices[train_size:train_size + val_size],
+            indices[train_size + val_size:]
+        )
+
+    def split_data(
+        self,
+        ptrain: float,
+        pval: float,
+        seed: Optional[int] = None,
+    ) -> tuple[NosoiSplit, NosoiSplit, NosoiSplit]:
+        """
+        Split processed data into train/val/test sets and preserve alignment
+        with raw data.
+
+        Parameters
+        ----------
+        ptrain : float
+            Proportion for training set.
+        pval : float
+            Proportion for validation set.
+        seed : int, optional
+            Seed for reproducible shuffling.
+
+        Returns
+        -------
+        train, val, test : tuple[NosoiSplit, NosoiSplit, NosoiSplit]
+            Each NosoiSplit contains:
+            - X, y: normalized input features and targets (as torch.Tensor)
+            - x_raw, y_raw: raw features and targets (as np.ndarray)
+        """
+        self._assert_data_loaded()
+
+        # Validate proportions
+        if not (0 < ptrain < 1 and 0 < pval < 1):
+            raise ValueError(
+                "Proportions must be between 0 and 1 (exclusive)."
+            )
+        if ptrain + pval > 1.0:
+            raise ValueError(
+                f"ptrain + pval must be ≤ 1.0 (got {ptrain + pval:.4f})"
+            )
+
+        # Get and normalize SST features
+        X, X_raw = self.x, self.x_raw
+        X = StandardScaler().fit_transform(X)
+
+        # Get target parameters
+        y, y_raw = self.y, self.y_raw
+
+        train_idx, val_idx, test_idx = self._generate_split_indices(
+            len(X), ptrain, pval, seed
+        )
+
+        # Slice tensors
+        def tensor(array: np.ndarray, idx: np.ndarray) -> torch.Tensor:
+            return torch.tensor(array[idx], dtype=torch.float32)
+
+        split_train = NosoiSplit(
+            tensor(X, train_idx),
+            tensor(y, train_idx),
+            X_raw[train_idx],
+            y_raw[train_idx]
+        )
+
+        split_val = NosoiSplit(
+            tensor(X, val_idx),
+            tensor(y, val_idx),
+            X_raw[val_idx],
+            y_raw[val_idx]
+        )
+
+        split_test = NosoiSplit(
+            tensor(X, test_idx),
+            tensor(y, test_idx),
+            X_raw[test_idx],
+            y_raw[test_idx]
+        )
+
+        # Return named splits
+        return split_train, split_val, split_test
