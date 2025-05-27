@@ -23,10 +23,28 @@ class NosoiSplit:
     x_raw: np.ndarray
     y_raw: np.ndarray
 
+    @property
     def input_dim(self) -> int:
+        """
+        Number of input features in the processed dataset.
+
+        Returns
+        -------
+        int
+            Number of columns in `X`.
+        """
         return self.X.shape[1]
 
+    @property
     def output_dim(self) -> int:
+        """
+        Number of target output parameters in the processed dataset.
+
+        Returns
+        -------
+        int
+            Number of columns in `y`.
+        """
         return self.y.shape[1]
 
     def make_dataloader(
@@ -124,20 +142,6 @@ class NosoiDataProcessor:
             col for col in self.df.columns if col.startswith("RAW_PAR_")
         ]
         return self.df[raw_cols].to_numpy()
-
-    @property
-    def input_dim(self) -> int:
-        """
-        Return the number of input features (columns starting with 'SST_').
-        """
-        return self.x.shape[1]
-
-    @property
-    def output_dim(self) -> int:
-        """
-        Return the number of target parameters (columns starting with 'PAR_').
-        """
-        return self.y.shape[1]
 
     # TODO: add docstring explanation of the protected prefixes and raw copy
     def _join_master_and_summary(self) -> None:
