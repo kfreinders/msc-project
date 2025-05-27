@@ -501,3 +501,75 @@ class NosoiDataProcessor:
 
         # Return named splits
         return split_train, split_val, split_test
+
+
+def prepare_nosoi_data(
+    summary_stats_csv: str,
+    master_csv: str,
+    output_dir: str = "data/splits",
+    ptrain: float = 0.7,
+    pval: float = 0.15,
+    seed: Optional[int] = None,
+    overwrite: bool = False
+) -> tuple[NosoiSplit, NosoiSplit, NosoiSplit]:
+    """
+    Preprocess nosoi data and save (or load) train/val/test splits.
+
+    Parameters
+    ----------
+    summary_stats_csv : str
+        Path to the summary statistics CSV.
+    master_csv : str
+        Path to the master parameter CSV.
+    output_dir : str, optional
+        Directory where the splits are stored. Default is 'data/splits'.
+    ptrain : float, optional
+        Proportion of data to allocate to training set. Default is 0.7.
+    pval : float, optional
+        Proportion of data to allocate to validation set. Default is 0.15.
+    seed : int, optional
+        Random seed for reproducibility.
+    overwrite : bool, optional
+        If False and split files exist, load them instead of recomputing.
+
+    Returns
+    -------
+    train, val, test : tuple[NosoiSplit, NosoiSplit, NosoiSplit]
+        The processed dataset splits.
+    """
+    setup_logging("data preprocessing")
+    logger = logging.getLogger(__name__)
+
+    if not overwrite and all(
+        os.path.exists(os.path.join(output_dir, f"{split}_{ext}"))
+        for split in ("train", "val", "test")
+        for ext in ("x.pt", "y.pt", "raw.npz")
+    ):
+        logger.info("Found existing split files. Loading from disk...")
+        train = NosoiSplit.load("train", output_dir)
+        val = NosoiSplit.load("val", output_dir)
+        test = NosoiSplit.load("test", output_dir)
+        return train, val, test
+
+    logger.info("Generating data splits from raw files...")
+
+    def log_transform(x: np.ndarray) -> np.ndarray:
+        return np.log(x)
+
+    transform_map = {
+        "PAR_p_fatal": log_transform
+    }
+
+    manager = NosoiDataProcessor(summary_stats_csv, master_csv)
+
+    manager.drop_by_filter(lambda df: df["SST_11"] > 2000, "SST_11 > 2000")
+    manager.apply_infectivity()
+    manager.apply_target_transforms(transform_map)
+
+    train, val, test = manager.split_data(ptrain, pval, seed)
+
+    train.save("train", output_dir)
+    val.save("val", output_dir)
+    test.save("test", output_dir)
+
+    return train, val, test
