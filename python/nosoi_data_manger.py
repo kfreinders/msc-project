@@ -48,14 +48,47 @@ class NosoiSplit:
         return self.y.shape[1]
 
     def make_dataloader(
-            self,
-            batch_size: int = 32,
-            shuffle: bool = True
+        self,
+        batch_size: int = 32,
+        shuffle: bool = False
     ) -> DataLoader:
+        """
+        Create a PyTorch DataLoader for the processed input and output tensors.
+
+        Warning: If `shuffle=True`, the correspondence between the processed
+        data (`X`, `y`) and their raw counterparts (`x_raw`, `y_raw`) is lost.
+        Use shuffling only when alignment with raw data is not needed (e.g.,
+        during training). For tracing model predictions back to the raw inputs,
+        leave shuffle=False to preserve alignment.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Number of samples per batch to load. Default is 32.
+        shuffle : bool, optional
+            Whether to shuffle the data at every epoch. Default is True.
+        Returns
+        -------
+        DataLoader
+            A PyTorch DataLoader that yields batches of (X, y) pairs.
+        """
         dataset = TensorDataset(self.X, self.y)
         return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
     def save(self, name: str, output_dir: str) -> None:
+        """
+        Save the split to disk, including both processed and raw data.
+
+        Saves `X` and `y` as PyTorch `.pt` files and `x_raw` and `y_raw` as
+        compressed NumPy `.npz`.
+
+        Parameters
+        ----------
+        name : str
+            Prefix for the output files (e.g., 'train', 'val', 'test').
+        output_dir : str
+            Directory where the files will be saved.
+        """
         os.makedirs(output_dir, exist_ok=True)
         torch.save(self.X, os.path.join(output_dir, f"{name}_x.pt"))
         torch.save(self.y, os.path.join(output_dir, f"{name}_y.pt"))
@@ -72,6 +105,26 @@ class NosoiSplit:
         input_dir: str,
         device: Optional[torch.device] = None
     ) -> "NosoiSplit":
+        """
+        Load a previously saved split from disk.
+
+        This method reconstructs a `NosoiSplit` object by loading the
+        processed tensors (`X`, `y`) and the raw arrays (`x_raw`, `y_raw`).
+
+        Parameters
+        ----------
+        name : str
+            Prefix of the saved files to load (e.g., 'train', 'val', 'test').
+        input_dir : str
+            Directory containing the saved files.
+        device : torch.device, optional
+            Device to map tensors to (e.g., 'cpu', 'cuda'). Defaults to CPU.
+
+        Returns
+        -------
+        NosoiSplit
+            The reconstructed split containing processed and raw data.
+        """
         if device is None:
             device = torch.device("cpu")
 
