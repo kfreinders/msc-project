@@ -88,9 +88,9 @@ class NosoiDataManager:
         """
         Load and inner-join summary statistics and parameter files on 'seed'.
 
-        This function populates self.df_merged with the joined dataset,
-        containing both summary statistics (e.g., SS_*) and simulation
-        parameters from nosoi.
+        This function populates self.df with the joined dataset, containing
+        both summary statistics (e.g., SS_*) and simulation parameters from
+        nosoi.
         """
         # Load summary statistics and parameters
         summary_df = pd.read_csv(self.summary_stats_csv)
@@ -159,7 +159,10 @@ class NosoiDataManager:
         mask = filter_fn(self.df)
         self.df = self.df[mask]
         n_after = len(self.df)
-        logger.info(f"Dropped {n_before - n_after:,} rows based on filter")
+        logger.info(
+            f"Dropped {n_before - n_after:,} rows out of {n_before:,} based "
+            f"on filter"
+        )
 
         # Print filter function description for logging purposes
         if filter_fn_desc is not None:
@@ -186,7 +189,7 @@ class NosoiDataManager:
         # Ensure infectivity is not already in the dataset
         if "PAR_infectivity" in self.df.columns:
             raise ValueError(
-                "Column 'PAR_infectivity' already exists in df_merged."
+                "Column 'PAR_infectivity' already exists in self.df."
             )
 
         # Ensure both mean_nContact and p_trans are present
