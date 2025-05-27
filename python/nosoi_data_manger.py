@@ -1,17 +1,72 @@
+import os
+import logging
+from dataclasses import dataclass
 from typing import Callable, Optional
+
+import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import TensorDataset
+from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import StandardScaler
-import logging
-import numpy as np
+
+from logging_config import setup_logging
 
 
 # Set up logger
 logger = logging.getLogger(__name__)
 
 
-class NosoiDataManager:
+@dataclass
+class NosoiSplit:
+    X: torch.Tensor
+    y: torch.Tensor
+    x_raw: np.ndarray
+    y_raw: np.ndarray
+
+    def input_dim(self) -> int:
+        return self.X.shape[1]
+
+    def output_dim(self) -> int:
+        return self.y.shape[1]
+
+    def make_dataloader(
+            self,
+            batch_size: int = 32,
+            shuffle: bool = True
+    ) -> DataLoader:
+        dataset = TensorDataset(self.X, self.y)
+        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
+    def save(self, name: str, output_dir: str) -> None:
+        os.makedirs(output_dir, exist_ok=True)
+        torch.save(self.X, os.path.join(output_dir, f"{name}_x.pt"))
+        torch.save(self.y, os.path.join(output_dir, f"{name}_y.pt"))
+        np.savez(
+            os.path.join(output_dir, f"{name}_raw.npz"),
+            x_raw=self.x_raw,
+            y_raw=self.y_raw
+        )
+
+    @classmethod
+    def load(
+        cls,
+        name: str,
+        input_dir: str,
+        device: Optional[torch.device] = None
+    ) -> "NosoiSplit":
+        if device is None:
+            device = torch.device("cpu")
+
+        X = torch.load(
+            os.path.join(input_dir, f"{name}_x.pt"), map_location=device
+        )
+        y = torch.load(
+            os.path.join(input_dir, f"{name}_y.pt"), map_location=device
+        )
+        raw = np.load(os.path.join(input_dir, f"{name}_raw.npz"))
+        return cls(X, y, raw["x_raw"], raw["y_raw"])
+
+
     """
     Manages loading, merging, filtering, and transforming data for nosoi
     simulations.
