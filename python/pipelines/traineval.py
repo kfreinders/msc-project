@@ -1,3 +1,25 @@
+"""
+Train and evaluate a deep neural network for nosoi parameter inference.
+
+This script handles the full pipeline of loading and preprocessing nosoi
+simulation data, training a DNN model to predict key epidemiological parameters
+from summary statistics, evaluating the model on a held-out test set, and
+visualizing the predictions.
+
+Steps:
+- Load and preprocess simulation data from CSV files
+- Apply transformations (e.g. log-transform of p_fatal) The data preprocessing
+  can be changed in python/data/nosoi_data_manger)
+- Train a DNN on summary statistics using PyTorch
+- Save the trained model
+- Evaluate the model on the test set
+- Generate prediction vs. ground-truth plots
+
+Requirements:
+- The summary statistics and master CSVs must be located in `data/nosoi/`
+- Output files are saved under `data/splits/` and `data/dnn/`
+"""
+
 import logging
 from utils.logging_config import setup_logging
 from models.model import NeuralNetwork
@@ -10,7 +32,7 @@ from utils.utils import (
     predict_nosoi_parameters,
     plot_predictions,
 )
-from data.nosoi_data_manger import prepare_nosoi_data
+from dataproc.nosoi_data_manger import prepare_nosoi_data
 
 
 # ------------------------------------------------------------------------------

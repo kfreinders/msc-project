@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import TensorDataset
 from sklearn.preprocessing import StandardScaler
 
-from data.nosoi_split import NosoiSplit
+from .nosoi_split import NosoiSplit
 from utils.logging_config import setup_logging
 
 
