@@ -3,6 +3,6 @@
 .Rhistory
 *.out
 *.err
-python/__pycache__
+__pycache__
 .mypy_cache/
 logs
