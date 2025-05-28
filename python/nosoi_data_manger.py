@@ -16,12 +16,15 @@ from logging_config import setup_logging
 logger = logging.getLogger(__name__)
 
 
+# TODO: also serialize column names and update save/load accordingly
 @dataclass
 class NosoiSplit:
     X: torch.Tensor
     y: torch.Tensor
     x_raw: np.ndarray
     y_raw: np.ndarray
+    x_raw_columns: Optional[list[str]] = None
+    y_raw_columns: Optional[list[str]] = None
 
     @property
     def input_dim(self) -> int:
@@ -136,6 +139,33 @@ class NosoiSplit:
         )
         raw = np.load(os.path.join(input_dir, f"{name}_raw.npz"))
         return cls(X, y, raw["x_raw"], raw["y_raw"])
+
+    def get_raw_feature(self, name: str) -> np.ndarray:
+        """
+        Get raw input feature values by column name.
+
+        Parameters
+        ----------
+        name : str
+            Column name to retrieve (e.g., 'SST_11').
+
+        Returns
+        -------
+        np.ndarray
+            Values of the requested raw input feature.
+
+        Raises
+        ------
+        ValueError
+            If column names are not available or the name is not found.
+        """
+        if self.x_raw_columns is None:
+            raise ValueError("x_raw column names are not available.")
+        try:
+            idx = self.x_raw_columns.index(name)
+        except ValueError:
+            raise ValueError(f"Column '{name}' not found in x_raw_columns.")
+        return self.x_raw[:, idx]
 
 
 class NosoiDataProcessor:
@@ -478,25 +508,37 @@ class NosoiDataProcessor:
         def tensor(array: np.ndarray, idx: np.ndarray) -> torch.Tensor:
             return torch.tensor(array[idx], dtype=torch.float32)
 
+        # Column names for raw features and targets
+        x_raw_cols = [col for col in self.df.columns if col.startswith("RAW_SST_")]
+        y_raw_cols = [col for col in self.df.columns if col.startswith("RAW_PAR_")]
+        x_raw_names = [col.removeprefix("RAW_") for col in x_raw_cols]
+        y_raw_names = [col.removeprefix("RAW_") for col in y_raw_cols]
+
         split_train = NosoiSplit(
             tensor(X, train_idx),
             tensor(y, train_idx),
             X_raw[train_idx],
-            y_raw[train_idx]
+            y_raw[train_idx],
+            x_raw_columns=x_raw_names,
+            y_raw_columns=y_raw_names
         )
 
         split_val = NosoiSplit(
             tensor(X, val_idx),
             tensor(y, val_idx),
             X_raw[val_idx],
-            y_raw[val_idx]
+            y_raw[val_idx],
+            x_raw_columns=x_raw_names,
+            y_raw_columns=y_raw_names
         )
 
         split_test = NosoiSplit(
             tensor(X, test_idx),
             tensor(y, test_idx),
             X_raw[test_idx],
-            y_raw[test_idx]
+            y_raw[test_idx],
+            x_raw_columns=x_raw_names,
+            y_raw_columns=y_raw_names
         )
 
         # Return named splits
