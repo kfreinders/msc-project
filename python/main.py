@@ -1,4 +1,3 @@
-import numpy as np
 import logging
 from logging_config import setup_logging
 from model import NeuralNetwork
@@ -7,23 +6,12 @@ import torch
 from torch import nn, optim
 from utils import (
     evaluate_model,
-    load_data,
-    split_data_with_meta,
     train_model,
     predict_nosoi_parameters,
     plot_predictions,
 )
-from nosoi_data_manger import NosoiDataManager
+from nosoi_data_manger import prepare_nosoi_data
 
-
-def log_transform(x: np.ndarray) -> np.ndarray:
-    """Wrapper for np.log to please the type checker."""
-    return np.log(x)
-
-
-def sqrt_transform(x: np.ndarray) -> np.ndarray:
-    """Wrapper for np.sqrt to further please the type checker."""
-    return np.sqrt(x)
 
 # ------------------------------------------------------------------------------
 # Main function
@@ -35,62 +23,33 @@ def main() -> None:
     setup_logging("training")
     logger = logging.getLogger(__name__)
 
+    # Preprocess split datasets
+    train_tensor, val_tensor, test_tensor = prepare_nosoi_data(
+        summary_stats_csv="data/nosoi/summary_stats_export.csv",
+        master_csv="data/nosoi/master.csv",
+        output_dir="data/splits",
+        overwrite=False
+    )
+
+    # Build dataloaders
+    train_loader = train_tensor.make_dataloader(shuffle=True)
+    val_loader = val_tensor.make_dataloader(shuffle=True)
+    test_loader = test_tensor.make_dataloader()
+
     # Use CUDA if available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
-    # Which transforms to apply to the data for training
-    transform_map = {
-        "PAR_p_fatal": log_transform
-    }
-
-    manager = NosoiDataManager(
-        "data/nosoi/summary_stats_export.csv",
-        "data/nosoi/master.csv"
-    )
-
-    # Drop simulations with less than 2000 individuals. Below this size,
-    # transmission chains seem to not have enough signal for the DNN to infer
-    # the nosoi parameters
-    manager.drop_by_filter(lambda df: df["SST_11"] > 2000, "SST_11 > 2000")
-
-    # Replace mean_nContact and p_trans by their product, which is the
-    # infectivity.
-    manager.apply_infectivity()
-
-    # Apply transforms to data. Currently, only predictions of p_fatal benefit
-    # from a log transform but do so significantly
-    manager.apply_target_transforms(transform_map)
-
-    dataset, meta, log_idxs = load_data(
-        "data/nosoi/merged.csv",
-        extract_columns=["SS_11"],
-        target_transforms=transform_map,
-        use_infectivity=True
-    )
-
     logger.info(
-        f"DNN model will have {manager.input_dim} inputs and "
-        f"{manager.output_dim} outputs"
-    )
-
-    # Split dataset into training, validation and testing sets
-    logger.info(
-        "Splitting dataset into training, validation and testing sets..."
-    )
-    train, val, test, _, _, test_meta = split_data_with_meta(
-        dataset,
-        meta,
-        ptrain=0.7,
-        pval=0.15,
-        batch_size=32
+        f"DNN model will have {train_tensor.input_dim} inputs and "
+        f"{train_tensor.output_dim} outputs"
     )
 
     # Initialize model
     logger.info("Initializing model...")
     model = NeuralNetwork(
-        input_dim=manager.input_dim,
-        output_dim=manager.output_dim,
+        input_dim=train_tensor.input_dim,
+        output_dim=train_tensor.output_dim,
         hidden_size=256,
         num_hidden_layers=4,
         dropout_rate=0.1
@@ -104,8 +63,8 @@ def main() -> None:
     logger.info("Training model...")
     trained_model, _ = train_model(
         model,
-        train,
-        val,
+        train_loader,
+        val_loader,
         criterion,
         optimizer,
         device,
@@ -119,22 +78,17 @@ def main() -> None:
     logger.info("Model saved to 'data/dnn/regressor.pt'.")
 
     # Evaluate model
-    test_loss = evaluate_model(trained_model, test, criterion, device)
+    test_loss = evaluate_model(trained_model, test_loader, criterion, device)
     logger.info(f"Test Loss: {test_loss:.4f}")
 
-    # Load model (redundant in this case since already in memory)
+    # # Load model (redundant in this case since already in memory)
     model.load_state_dict(
         torch.load("data/dnn/regressor.pt", map_location=device)
     )
     model.to(device)
 
     # Predict
-    preds, trues = predict_nosoi_parameters(model, test, device)
-
-    # Apply inverse transform for plotting
-    for i in log_idxs:
-        preds[:, i] = np.exp(preds[:, i])
-        trues[:, i] = np.exp(trues[:, i])
+    preds, trues = predict_nosoi_parameters(model, test_loader, device)
 
     # Plot
     param_names = [
@@ -146,7 +100,8 @@ def main() -> None:
         "t_recovery",
     ]
 
-    fig = plot_predictions(preds, trues, param_names, test_meta["SS_11"])
+    sst_11_values = test_tensor.get_raw_feature("SST_11")
+    fig = plot_predictions(preds, trues, param_names, sst_11_values)
     fig.savefig("predicted_vs_true.png", dpi=400, bbox_inches="tight")
 
 
