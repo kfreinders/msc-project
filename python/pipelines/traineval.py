@@ -9,15 +9,16 @@ visualizing the predictions.
 Steps:
 - Load and preprocess simulation data from CSV files
 - Apply transformations (e.g. log-transform of p_fatal) The data preprocessing
-  can be changed in python/data/nosoi_data_manger)
+  steps can be changed in python/dataproc/nosoi_data_manger.py)
 - Train a DNN on summary statistics using PyTorch
 - Save the trained model
 - Evaluate the model on the test set
 - Generate prediction vs. ground-truth plots
 
 Requirements:
-- The summary statistics and master CSVs must be located in `data/nosoi/`
-- Output files are saved under `data/splits/` and `data/dnn/`
+- The summary statistics and master CSVs must be located in the top-level
+  project directories `/data/nosoi/`
+- Output files are saved under `/data/splits/` and `/data/dnn/`
 """
 
 import logging
