@@ -2,6 +2,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
+from summary_stats import compute_summary_statistics
 
 
 def reconstruct_hosts_ID(df: pd.DataFrame) -> pd.DataFrame:
@@ -119,3 +120,11 @@ def load_simulation(
 
     # Return reconstructed transmission chain
     return (reconstructed if not as_graph else df_to_nx_graph(df)), decoded
+
+
+if __name__ == "__main__":
+    f = "data/nosoi/inftable_1902751282_mapped.parquet"
+    # graph, metadata = load_simulation(f, as_graph=True)
+    df, metadata = load_simulation(f)
+    compute_summary_statistics(df)
+    print(df)

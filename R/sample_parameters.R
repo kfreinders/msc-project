@@ -2,6 +2,7 @@
 #    PARAMETER SET GENERATION                                                  #
 #------------------------------------------------------------------------------#
 
+# FIXME: handling of ranges vs fixed values
 generate_parameters <- function(amount, param_bounds) {
   # Ensure `amount` is a valid positive integer
   if (!is.numeric(amount) || amount <= 0 || amount != as.integer(amount)) {
@@ -53,6 +54,7 @@ generate_parameters <- function(amount, param_bounds) {
 #    PARAMETER SET VALIDATION FUNCTION                                         #
 #------------------------------------------------------------------------------#
 
+# TODO: validate that input is numeric
 validate_bounds <- function(param_bounds) {
   for (param in names(param_bounds)) {
     bounds <- param_bounds[[param]]
@@ -93,7 +95,7 @@ validate_parameters <- function(df, param_bounds) {
       if (any(df[[param]] < min_val | df[[param]] > max_val)) {
         stop(paste("Error: Values out of range for", param))
       }
-    # Handle fixed value
+    # TODO: Handle fixed value; dead code?
     } else {
       fixed_val <- bounds[1]
       if (any(df[[param]] != fixed_val)) {
@@ -113,6 +115,7 @@ resume_or_generate_parameters <- function(n_sim, param_bounds, output_folder, pa
     df <- fread(paramsets_file)
 
     existing_files <- list.files(output_folder, pattern = "^inftable_\\d{10}_mapped\\.parquet$")
+    # TODO: regex instead of substring
     completed_seeds <- as.integer(substr(existing_files, 10, 19))
     df <- df[!(df$seed %in% completed_seeds), ]
 
