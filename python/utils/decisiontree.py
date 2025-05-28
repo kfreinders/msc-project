@@ -2,7 +2,7 @@ from dtreeviz.trees import model
 import pandas as pd
 from sklearn.tree import DecisionTreeClassifier
 import logging
-from logging_config import setup_logging
+from utils.logging_config import setup_logging
 
 
 def main() -> None:

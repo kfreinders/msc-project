@@ -1,16 +1,16 @@
 import logging
-from logging_config import setup_logging
-from model import NeuralNetwork
+from utils.logging_config import setup_logging
+from models.model import NeuralNetwork
 import os
 import torch
 from torch import nn, optim
-from utils import (
+from utils.utils import (
     evaluate_model,
     train_model,
     predict_nosoi_parameters,
     plot_predictions,
 )
-from nosoi_data_manger import prepare_nosoi_data
+from data.nosoi_data_manger import prepare_nosoi_data
 
 
 # ------------------------------------------------------------------------------

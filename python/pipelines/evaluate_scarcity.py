@@ -1,7 +1,7 @@
 from pathlib import Path
-from simulation_loader import reconstruct_hosts_ID
-from scarcity_strategies import RandomNodeDrop
-from summary_stats import compute_summary_statistics
+from data.simulation_loader import reconstruct_hosts_ID
+from data.scarcity_strategies import RandomNodeDrop
+from data.summary_stats import compute_summary_statistics
 import pandas as pd
 import pyarrow.parquet as pq
 import os

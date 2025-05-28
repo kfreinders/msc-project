@@ -6,9 +6,9 @@ import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-from logging_config import setup_logging
+from utils.logging_config import setup_logging
 from model import NeuralNetwork
-from utils import train_model, load_data, split_data
+from utils.utils import train_model, load_data, split_data
 
 
 def generate_paramsets(params: dict[str, list[float]]) -> list[dict]:
