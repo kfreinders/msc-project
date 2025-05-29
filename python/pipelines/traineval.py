@@ -41,6 +41,42 @@ from dataproc.nosoi_data_manger import prepare_nosoi_data
 # ------------------------------------------------------------------------------
 
 
+def save_with_versioning(
+    model: torch.nn.Module,
+    path: str,
+    logger: logging.Logger
+) -> None:
+    """
+    Save a PyTorch model to `path`, renaming any existing file by appending a
+    version number.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The PyTorch model to save.
+    path : str
+        The full path to save the model to (e.g., '../data/dnn/regressor.pt').
+    logger : logging.Logger
+        A configured logger to report actions.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    # If the file exists, move it to a versioned filename
+    if os.path.exists(path):
+        base, ext = os.path.splitext(path)
+        i = 1
+        while True:
+            backup_path = f"{base}-{i}{ext}"
+            if not os.path.exists(backup_path):
+                os.rename(path, backup_path)
+                logger.info(f"Existing model renamed to '{backup_path}'.")
+                break
+            i += 1
+
+    torch.save(model.state_dict(), path)
+    logger.info(f"Model saved to '{path}'.")
+
+
 def main() -> None:
     # Set up logger
     setup_logging("training")
@@ -48,9 +84,9 @@ def main() -> None:
 
     # Preprocess split datasets
     train_tensor, val_tensor, test_tensor = prepare_nosoi_data(
-        summary_stats_csv="data/nosoi/summary_stats_export.csv",
-        master_csv="data/nosoi/master.csv",
-        output_dir="data/splits",
+        summary_stats_csv="../data/nosoi/summary_stats_export.csv",
+        master_csv="../data/nosoi/master.csv",
+        output_dir="../data/splits",
         overwrite=False
     )
 
@@ -97,9 +133,12 @@ def main() -> None:
 
     # Save the trained model
     # TODO: save existing regressor.pt as "regressor-n.pt" and save current
-    os.makedirs("data/dnn", exist_ok=True)
-    torch.save(model.state_dict(), "data/dnn/regressor.pt")
-    logger.info("Model saved to 'data/dnn/regressor.pt'.")
+
+    save_with_versioning(trained_model, "../data/dnn/regressor.pt", logger)
+
+    os.makedirs("../data/dnn", exist_ok=True)
+    torch.save(model.state_dict(), "../data/dnn/regressor.pt")
+    logger.info("Model saved to '../data/dnn/regressor.pt'.")
 
     # Evaluate model
     test_loss = evaluate_model(trained_model, test_loader, criterion, device)
@@ -107,7 +146,7 @@ def main() -> None:
 
     # # Load model (redundant in this case since already in memory)
     model.load_state_dict(
-        torch.load("data/dnn/regressor.pt", map_location=device)
+        torch.load("../data/dnn/regressor.pt", map_location=device)
     )
     model.to(device)
 
