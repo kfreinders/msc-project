@@ -75,6 +75,8 @@ class NosoiDataProcessor:
         return self.df[raw_cols].to_numpy()
 
     # TODO: add docstring explanation of the protected prefixes and raw copy
+    # FIXME: add protected prefixes to internal df and saved splits here. Don't
+    # expect them in master.csv and summary_stats_export.csv
     def _join_master_and_summary(self) -> None:
         """
         Load and inner-join summary statistics and parameter files on 'seed'.
