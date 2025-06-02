@@ -1,145 +1,392 @@
+from typing import Callable, Sequence
 import numpy as np
 import pandas as pd
 import networkx as nx
 
+from .simulation_loader import NosoiSimulation
 
-def safe_stat(func, x, default=0):
-    try:
-        val = func(x.dropna())
-        return default if pd.isna(val) else val
-    except Exception:
+
+def safe_stat(
+    func: Callable,
+    x: Sequence[float] | np.ndarray | pd.Series,
+    default: float = 0.0
+) -> float:
+    """
+    Compute a statistic and return a default if the input is empty or invalid.
+
+    Parameters
+    ----------
+    func : callable
+        A statistical function such as np.mean, np.median, etc.
+    x : array-like
+        Input data to apply the function to. Can be a list, numpy array, or
+        pandas Series.
+    default : float
+        Fallback value if computation fails or result is NaN.
+
+    Returns
+    -------
+    float
+        Computed statistic or the default value.
+    """
+    series = pd.Series(x).dropna()
+    if series.empty:
         return default
 
+    try:
+        val = func(series)
+    except Exception as e:
+        raise ValueError(
+            f"Failed to compute statistic with {func.__name__}: {e}"
+        )
 
-def compute_summary_statistics(
-    hosts_table: pd.DataFrame, nosoi_settings: dict, metadata: dict
-) -> pd.DataFrame:
-    # Basic statistics
-    ss_noninf = (~hosts_table["hosts.ID"].isin(hosts_table["inf.by"])).sum()
-    freq_table = hosts_table["inf.by"].value_counts()
-    result_table = freq_table.reset_index()
-    result_table.columns = ["hosts.ID", "Frequency"]
+    return float(val) if not pd.isna(val) else default
 
-    ss_mean_secinf = safe_stat(np.mean, result_table["Frequency"])
-    ss_med_secinf = safe_stat(np.median, result_table["Frequency"])
-    ss_var_secinf = safe_stat(np.var, result_table["Frequency"])
 
-    # Fraction of infectors responsible for 50%
-    result_table = result_table.sort_values("Frequency", ascending=False)
-    result_table["Cumulative"] = result_table["Frequency"].cumsum()
-    total_infections = result_table["Frequency"].sum()
-    half = total_infections * 0.5
-    ss_fractop50 = ((result_table["Cumulative"] >= half).idxmax() + 1) / len(
-        result_table
-    )
+# ------------------------------------------------------------------------------
+# SECTION: Infection Statistics
+# ------------------------------------------------------------------------------
 
-    ss_hostspertime = len(hosts_table) / metadata["simtime"]
 
-    # Infection time stats
-    inf_time = hosts_table["out.time"] - hosts_table["inf.time"]
-    ss_mean_inftime = safe_stat(np.mean, inf_time)
-    ss_med_inftime = safe_stat(np.median, inf_time)
-    ss_var_inftime = safe_stat(np.var, inf_time)
+def compute_secondary_infections(
+        simulation: NosoiSimulation
+) -> dict[str, float]:
+    """
+    Compute summary statistics related to secondary infections.
 
-    ss_prop_infectors = len(freq_table) / len(hosts_table)
+    Parameters
+    ----------
+    simulation : NosoiSimulation
+        A loaded NosoiSimulation instance containing the transmission chain.
 
-    ss_active_final = hosts_table["active"].sum()
-    ss_hosts_total = len(hosts_table)
-    ss_frac_active_final = ss_active_final / ss_hosts_total if ss_hosts_total > 0 else 0
+    Returns
+    -------
+    dict[str, float]
+        A dictionary of computed summary statistics:
+        - SST_00: Count of non-infectors
+        - SST_01: Mean number of secondary infections
+        - SST_02: Median number of secondary infections
+        - SST_03: Variance in number of secondary infections
+        - SST_04: Fraction of infectors causing 50% of infections
+        - SST_05: Fraction of hosts that caused at least one secondary
+          infection
+        - SST_06: Total number of hosts
+    """
+    hosts = simulation.df
 
-    # Infection timing difference
-    merged = hosts_table.merge(
-        hosts_table,
+    # Count how often each host infected others
+    freq = hosts["inf.by"].value_counts()
+
+    # Table of secondary infection counts
+    table = freq.reset_index()
+    table = table.rename(columns={"index": "hosts.ID", "inf.by": "Frequency"})
+
+    # Fraction of infectors causing 50% of infections
+    table_sorted = table.sort_values("Frequency", ascending=False)
+    cumulative = table_sorted["Frequency"].cumsum()
+    half = table_sorted["Frequency"].sum() * 0.5
+    n_top_50 = (cumulative >= half).idxmax() + 1
+    frac_top_50 = n_top_50 / len(table_sorted)
+
+    return {
+        "SST_00": (~hosts["hosts.ID"].isin(freq.index)).sum(),
+        "SST_01": safe_stat(np.mean, table["Frequency"]),
+        "SST_02": safe_stat(np.median, table["Frequency"]),
+        "SST_03": safe_stat(np.var, table["Frequency"]),
+        "SST_04": frac_top_50,
+        "SST_05": (
+            len(freq) / simulation.n_hosts if simulation.n_hosts > 0 else 0
+        ),
+        "SST_06": simulation.n_hosts,
+    }
+
+
+def compute_infection_timing(simulation: NosoiSimulation) -> dict[str, float]:
+    """
+    Compute infection duration and activity statistics.
+
+    Parameters
+    ----------
+    simulation : NosoiSimulation
+        A loaded NosoiSimulation instance containing the transmission chain.
+
+    Returns
+    -------
+    dict[str, float]
+        A dictionary of computed summary statistics:
+        - SST_07: Average number of infections per day time step
+        - SST_08: Mean duration of infection
+        - SST_09: Median duration of infection
+        - SST_10: Variance in infection duration
+        - SST_11: Number of individuals still infectious at the end of the
+          simulation.
+        - SST_12: Proportion of all infected individuals who are still
+          infectious at the end.
+    """
+    hosts = simulation.df
+
+    delta = hosts["out.time"] - hosts["inf.time"]
+
+    # Total host
+    return {
+        "SST_07": simulation.n_hosts / simulation.simtime,
+        "SST_08": safe_stat(np.mean, delta),
+        "SST_09": safe_stat(np.median, delta),
+        "SST_10": safe_stat(np.var, delta),
+        "SST_11": simulation.n_active,
+        "SST_12": (
+            simulation.n_active / simulation.n_hosts
+            if simulation.n_hosts > 0 else 0
+        ),
+    }
+
+
+def compute_infection_lag(simulation: NosoiSimulation) -> dict[str, float]:
+    """
+    Compute the time lag between infector and infectee infection times.
+
+    Parameters
+    ----------
+    simulation : NosoiSimulation
+        A loaded NosoiSimulation instance containing the transmission chain.
+
+    Returns
+    -------
+    dict[str, float]
+        A dictionary of computed summary statistics:
+        - SST_13: Mean time between an infector's infection and the infection
+          of their contacts.
+        - SST_14: Median time lag between infector and infectee infections.
+        - SST_15: Variance in infection lags.
+        - SST_16: Shortest lag time per infector, averaged across all infectors
+          (typical minimum delay to first transmission).
+    """
+    hosts = simulation.df
+    simtime = simulation.simtime
+
+    # Merge each host with their infector to calculate infection time lag
+    merged = hosts.merge(
+        hosts,
         left_on="inf.by",
         right_on="hosts.ID",
-        suffixes=("", "_infector"),
+        suffixes=("", "_infector")
     )
     merged["inf_time_diff"] = merged["inf.time"] - merged["inf.time_infector"]
 
-    ss_mean_inflag = safe_stat(
-        np.mean, merged["inf_time_diff"], metadata["simtime"] + 1
+    if len(merged) < 2:
+        default_lag = simtime + 1
+        return {
+            "SST_13": default_lag,
+            "SST_14": default_lag,
+            "SST_15": default_lag,
+            "SST_16": default_lag,
+        }
+
+    return {
+        "SST_13": safe_stat(np.mean, merged["inf_time_diff"], simtime + 1),
+        "SST_14": safe_stat(np.median, merged["inf_time_diff"]),
+        "SST_15": safe_stat(np.var, merged["inf_time_diff"]),
+        "SST_16": (
+            safe_stat(np.min, merged.groupby("inf.by")["inf_time_diff"].min())
+        ),
+    }
+
+
+# TODO: don't hardcode the maximum simulation lenght here, but extract it from
+# R/config.R
+def compute_runtime_fraction(simulation: NosoiSimulation) -> dict[str, float]:
+    """
+    Compute the runtime fraction as a proportion of maximum simulation length.
+
+    Parameters
+    ----------
+    simulation : NosoiSimulation
+        A loaded NosoiSimulation instance containing the transmission chain.
+
+    Returns
+    -------
+    dict[str, float]
+        One summary statistic SS_18: runtime as fraction of 100 units.
+    """
+    return {
+        "SST_17": simulation.simtime / 100
+    }
+
+
+# ------------------------------------------------------------------------------
+# SECTION: Network Statistics
+# ------------------------------------------------------------------------------
+
+
+# ---- Expensive metrics: use sampled subgraph ----
+# FIXME: what if we accidentally sample at the end of the tree? Then we get a
+# much too small subsample!
+def sample_connected_subgraph(G: nx.Graph, max_nodes: int = 200) -> nx.Graph:
+    """
+    Sample a connected subgraph of maximum size from a larger graph using BFS.
+
+    Parameters
+    ----------
+    G : nx.Graph
+        Input graph (directed or undirected).
+    max_nodes : int
+        Maximum number of nodes to include in the sample. Default is 200.
+
+    Returns
+    -------
+    nx.Graph
+        Subgraph induced by sampled nodes.
+    """
+    # Use BFS from a random seed node
+    start = np.random.choice(list(G.nodes))
+    visited: set[np.float64] = set()
+    queue = [start]
+    while queue and len(visited) < max_nodes:
+        node = queue.pop(0)
+        if node not in visited:
+            visited.add(node)
+            queue.extend(n for n in G.neighbors(node) if n not in visited)
+    return G.subgraph(visited).copy()
+
+
+def compute_network_statistics(
+    simulation: NosoiSimulation,
+    max_nodes: int = 200
+) -> dict[str, float]:
+    """
+    Compute network-related summary statistics from the transmission chain.
+
+    Parameters
+    ----------
+    simulation : NosoiSimulation
+        A loaded NosoiSimulation instance containing the transmission chain.
+    max_nodes : int, optional
+        Maximum number of nodes to use for computing expensive statistics via
+        subgraph sampling (default is 200).
+
+    Returns
+    -------
+    dict[str, float]
+        Summary statistics on degree, structure, and connectivity of the
+        network:
+        - SST_18: Average number of direct infection links per individual (mean
+          degree).
+        - SST_19: Likelihood that two contacts of the same individual also
+          infected each other (global clustering coefficient).
+        - SST_20: Proportion of all possible infection links that are present
+          (graph density).
+        - SST_21: Longest shortest path between any two individuals in the
+          sampled graph (graph diameter).
+        - SST_22: Average size of an individual's immediate infection
+          neighborhood (ego graph size).
+        - SST_23: Minimum number of steps to reach the furthest individual from
+          the center of the sampled graph (graph radius).
+        - SST_24: Overall ease of infection spreading across the network
+          (global efficiency).
+    """
+    G = simulation.as_graph()
+
+    # Early return on single-node graph
+    if G.number_of_nodes() == 1:
+        return {
+            "SST_18": 0.0,
+            "SST_19": 0.0,
+            "SST_20": 0.0,
+            "SST_21": np.nan,
+            "SST_22": 1.0,
+            "SST_23": np.nan,
+            "SST_24": np.nan,
+        }
+
+    undirected = G.to_undirected(as_view=True)
+
+    degrees = np.array([deg for _, deg in undirected.degree])
+    ego_sizes = [len(G[n]) + 1 for n in G.nodes]
+
+    sampled = (
+        sample_connected_subgraph(undirected, max_nodes)
+        if G.number_of_nodes() > max_nodes
+        else undirected
     )
-    ss_min_inflag = (
-        safe_stat(lambda x: x.min(), merged.groupby("inf.by")["inf_time_diff"].min())
-        if len(merged) > 1
-        else metadata["simtime"] + 1
-    )
-    ss_med_inflag = safe_stat(np.median, merged["inf_time_diff"])
-    ss_var_inflag = safe_stat(np.var, merged["inf_time_diff"])
 
-    ss_frac_runtime = metadata["simtime"] / nosoi_settings["length"]
-
-    # Network statistics
-    edges = hosts_table[["inf.by", "hosts.ID"]].dropna()
-    G = nx.from_pandas_edgelist(
-        edges, source="inf.by", target="hosts.ID", create_using=nx.DiGraph
+    diameter = (
+        nx.diameter(sampled)
+        if nx.is_connected(sampled) and len(sampled) > 1
+        else np.nan
     )
 
-    ss_g_degree = safe_stat(np.mean, pd.Series(dict(G.degree())).values())
-    ss_g_clustcoef = nx.transitivity(G)
-    ss_g_density = nx.density(G)
-    ss_g_diam = nx.diameter(G) if nx.is_connected(G.to_undirected()) else np.nan
-    ss_g_meanego = safe_stat(
-        np.mean, pd.Series([len(nx.ego_graph(G, n)) for n in G.nodes])
+    radius = (
+        nx.radius(sampled)
+        if nx.is_connected(sampled) and len(sampled) > 1
+        else np.nan
     )
-    ss_g_radius = nx.radius(G) if nx.is_connected(G.to_undirected()) else np.nan
-    ss_g_meanalpha = safe_stat(np.mean, pd.Series(nx.alpha_centrality(G)))
-    ss_g_effglob = nx.global_efficiency(G)
 
-    # Deaths
-    if "fate" in hosts_table.columns:
-        deaths = hosts_table["fate"] == 1
-        recovered = hosts_table["fate"] == 2
-        time_to_death = (hosts_table["out.time"] - hosts_table["inf.time"])[deaths]
+    efficiency = nx.global_efficiency(sampled) if len(sampled) > 1 else np.nan
 
-        ss_deaths = deaths.sum()
-        ss_mean_deaths = safe_stat(np.mean, deaths.astype(int))
-        ss_mean_ttd = safe_stat(np.mean, time_to_death)
-        ss_med_ttd = safe_stat(np.median, time_to_death)
-        ss_var_ttd = safe_stat(np.var, time_to_death)
-        ss_death_recov_ratio = (
-            ss_deaths / recovered.sum() if recovered.sum() > 0 else np.nan
-        )
-    else:
-        ss_deaths = ss_mean_deaths = ss_mean_ttd = ss_med_ttd = ss_var_ttd = (
-            ss_death_recov_ratio
-        ) = np.nan
+    return {
+        "SST_18": safe_stat(np.mean, degrees),
+        "SST_19": nx.transitivity(G),
+        "SST_20": nx.density(G),
+        "SST_21": diameter,
+        "SST_22": safe_stat(np.mean, pd.Series(ego_sizes)),
+        "SST_23": radius,
+        "SST_24": efficiency,
+    }
 
-    return pd.DataFrame(
-        [
-            {
-                "SS_01": ss_noninf,
-                "SS_02": ss_mean_secinf,
-                "SS_03": ss_med_secinf,
-                "SS_04": ss_var_secinf,
-                "SS_05": ss_fractop50,
-                "SS_06": ss_hostspertime,
-                "SS_07": ss_mean_inftime,
-                "SS_08": ss_med_inftime,
-                "SS_09": ss_var_inftime,
-                "SS_10": ss_prop_infectors,
-                "SS_11": ss_hosts_total,
-                "SS_12": ss_active_final,
-                "SS_13": ss_frac_active_final,
-                "SS_14": ss_mean_inflag,
-                "SS_15": ss_min_inflag,
-                "SS_16": ss_med_inflag,
-                "SS_17": ss_var_inflag,
-                "SS_18": ss_frac_runtime,
-                "SS_19": ss_g_degree,
-                "SS_20": ss_g_clustcoef,
-                "SS_21": ss_g_density,
-                "SS_22": ss_g_diam,
-                "SS_23": ss_g_meanego,
-                "SS_24": ss_g_radius,
-                "SS_25": ss_g_meanalpha,
-                "SS_26": ss_g_effglob,
-                "SS_27": ss_deaths,
-                "SS_28": ss_mean_deaths,
-                "SS_29": ss_mean_ttd,
-                "SS_30": ss_med_ttd,
-                "SS_31": ss_var_ttd,
-                "SS_32": ss_death_recov_ratio,
-            }
-        ]
-    )
+
+# ------------------------------------------------------------------------------
+# SECTION: Death Statistics
+# ------------------------------------------------------------------------------
+
+
+def compute_death_statistics(simulation: NosoiSimulation):
+    """
+    Compute summary statistics related to death and recovery outcomes.
+
+    Parameters
+    ----------
+    simulation : NosoiSimulation
+        A loaded NosoiSimulation instance containing the transmission chain.
+
+    Returns
+    -------
+    dict[str, float]
+        A dictionary of computed summary statistics:
+        - SST_25: Total number of deaths.
+        - SST_26: Fraction of individuals who died.
+        - SST_27: Mean time to death.
+        - SST_28: Variance in time to death.
+        - SST_29: Total number of recoveries.
+        - SST_30: Fraction of individuals who recovered.
+        - SST_31: Mean time to recovery.
+        - SST_32: Variance in time to recovery.
+    """
+    hosts = simulation.df
+    if "fate" not in hosts.columns:
+        return {
+            "SST_25": np.nan,
+            "SST_26": np.nan,
+            "SST_27": np.nan,
+            "SST_28": np.nan,
+            "SST_29": np.nan,
+            "SST_30": np.nan,
+            "SST_31": np.nan,
+            "SST_32": np.nan,
+        }
+
+    deaths = hosts["fate"] == 1
+    recovered = hosts["fate"] == 2
+
+    ttd = (hosts["out.time"] - hosts["inf.time"])[deaths]
+    ttr = (hosts["out.time"] - hosts["inf.time"])[recovered]
+
+    return {
+        "SST_25": simulation.n_deaths,
+        "SST_26": simulation.n_deaths / simulation.n_hosts,
+        "SST_27": safe_stat(np.mean, ttd),
+        "SST_28": safe_stat(np.var, ttd),
+        "SST_29": simulation.n_recoveries,
+        "SST_30": simulation.n_recoveries / simulation.n_hosts,
+        "SST_31": safe_stat(np.mean, ttr),
+        "SST_32": safe_stat(np.var, ttr),
+    }
