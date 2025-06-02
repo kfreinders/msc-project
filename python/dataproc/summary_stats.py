@@ -77,6 +77,17 @@ def compute_secondary_infections(
     # Count how often each host infected others
     freq = hosts["inf.by"].value_counts()
 
+    if freq.empty:
+        return {
+            "SST_00": simulation.n_hosts,
+            "SST_01": 0.0,
+            "SST_02": 0.0,
+            "SST_03": 0.0,
+            "SST_04": 0.0,
+            "SST_05": 0.0,
+            "SST_06": simulation.n_hosts,
+        }
+
     # Table of secondary infection counts
     table = freq.reset_index()
     table = table.rename(columns={"index": "hosts.ID", "inf.by": "Frequency"})
