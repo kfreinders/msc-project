@@ -390,3 +390,90 @@ def compute_death_statistics(simulation: NosoiSimulation):
         "SST_31": safe_stat(np.mean, ttr),
         "SST_32": safe_stat(np.var, ttr),
     }
+
+
+# ------------------------------------------------------------------------------
+# Main function
+# ------------------------------------------------------------------------------
+
+# TODO: permuation tests
+# TODO: SHAP values
+def compute_summary_statistics(
+    simulation: NosoiSimulation
+) -> pd.DataFrame:
+    """
+    Compute summary statistics from a transmission chain.
+
+    This function combines statistics from multiple aspects of the simulation,
+    including secondary infection patterns, infection durations, timing of
+    transmissions, network structure, and outcome distributions (deaths and
+    recoveries).
+
+    Parameters
+    ----------
+    simulation
+        A loaded NosoiSimulation instance containing the transmission chain.
+
+    Returns
+    -------
+    pd.DataFrame
+        A single-row DataFrame with named summary statistics that characterize
+        the transmission dynamics and outcomes of the simulation.
+        - SST_00: Count of non-infectors
+        - SST_01: Mean number of secondary infections
+        - SST_02: Median number of secondary infections
+        - SST_03: Variance in number of secondary infections
+        - SST_04: Fraction of infectors causing 50% of infections
+        - SST_05: Fraction of hosts that caused at least one secondary
+          infection
+        - SST_06: Total number of hosts
+        - SST_07: Average number of infections per day time step
+        - SST_08: Mean duration of infection
+        - SST_09: Median duration of infection
+        - SST_10: Variance in infection duration
+        - SST_11: Number of individuals still infectious at the end of the
+          simulation.
+        - SST_12: Proportion of all infected individuals who are still
+          infectious at the end.
+        - SST_13: Mean time between an infector's infection and the infection
+          of their contacts.
+        - SST_14: Median time lag between infector and infectee infections.
+        - SST_15: Variance in infection lags.
+        - SST_16: Shortest lag time per infector, averaged across all infectors
+          (typical minimum delay to first transmission).
+        - SST_17: Runtime as a fraction of the maximum allowed simulation time.
+        - SST_18: Average number of direct infection links per individual
+          (mean degree).
+        - SST_19: Likelihood that two contacts of the same individual also
+          infected each other (global clustering coefficient).
+        - SST_20: Proportion of all possible infection links that are
+          present (graph density).
+        - SST_21: Longest shortest path between any two individuals in the
+          sampled graph (graph diameter).
+        - SST_22: Average size of an individual's immediate infection
+          neighborhood (ego graph size).
+        - SST_23: Minimum number of steps to reach the furthest individual
+          from the center of the sampled graph (graph radius).
+        - SST_24: Overall ease of infection spreading across the network
+          (global efficiency).
+        - SST_25: Total number of deaths.
+        - SST_26: Fraction of individuals who died.
+        - SST_27: Mean time to death.
+        - SST_28: Variance in time to death.
+        - SST_29: Total number of recoveries.
+        - SST_30: Fraction of individuals who recovered.
+        - SST_31: Mean time to recovery.
+        - SST_32: Variance in time to recovery.
+    """
+    sections = [
+        compute_secondary_infections(simulation),
+        compute_infection_timing(simulation),
+        compute_infection_lag(simulation),
+        compute_runtime_fraction(simulation),
+        compute_network_statistics(simulation),
+        compute_death_statistics(simulation),
+    ]
+
+    return pd.DataFrame([{
+        key: value for section in sections for key, value in section.items()
+    }])
