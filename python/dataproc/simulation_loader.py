@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Optional
 
 import networkx as nx
@@ -18,6 +19,31 @@ class NosoiSimulation:
     df: pd.DataFrame
     metadata: dict[str, float]
     _graph: Optional[nx.DiGraph] = field(default=None, init=False, repr=False)
+
+    @cached_property
+    def simtime(self) -> float:
+        """Total duration of the simulation (from metadata)."""
+        return float(self.metadata.get("simtime", 0))
+
+    @cached_property
+    def n_hosts(self) -> int:
+        """Total number of infected hosts."""
+        return len(self.df)
+
+    @cached_property
+    def n_active(self) -> int:
+        """Number of infective individuals at the end of simulation."""
+        return (self.df["fate"] == 0).sum()
+
+    @cached_property
+    def n_deaths(self) -> int:
+        """Number of deceased individuals at the end of simulation."""
+        return (self.df["fate"] == 1).sum()
+
+    @cached_property
+    def n_recoveries(self) -> int:
+        """Number of recovered individuals at the end of simulation."""
+        return (self.df["fate"] == 2).sum()
 
     @classmethod
     def from_parquet(cls, parquet_path: str) -> "NosoiSimulation":
