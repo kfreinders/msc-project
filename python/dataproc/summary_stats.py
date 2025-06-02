@@ -75,7 +75,9 @@ def compute_secondary_infections(
     hosts = simulation.df
 
     # Count how often each host infected others
-    freq = hosts["inf.by"].value_counts()
+    inf_by = hosts["inf.by"]
+    valid_inf_by = inf_by.dropna().astype("Int64")
+    freq = valid_inf_by.value_counts()
 
     if freq.empty:
         return {
@@ -89,14 +91,13 @@ def compute_secondary_infections(
         }
 
     # Table of secondary infection counts
-    table = freq.reset_index()
-    table = table.rename(columns={"index": "hosts.ID", "inf.by": "Frequency"})
+    table = freq.rename_axis("hosts.ID").reset_index(name="Frequency")
 
     # Fraction of infectors causing 50% of infections
     table_sorted = table.sort_values("Frequency", ascending=False)
     cumulative = table_sorted["Frequency"].cumsum()
-    half = table_sorted["Frequency"].sum() * 0.5
-    n_top_50 = (cumulative >= half).idxmax() + 1
+    half = cumulative.iloc[-1] * 0.5
+    n_top_50 = (cumulative >= half).values.argmax() + 1
     frac_top_50 = n_top_50 / len(table_sorted)
 
     return {
