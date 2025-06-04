@@ -230,35 +230,67 @@ def compute_runtime_fraction(simulation: NosoiSimulation) -> dict[str, float]:
 # ------------------------------------------------------------------------------
 
 
-# ---- Expensive metrics: use sampled subgraph ----
-# FIXME: what if we accidentally sample at the end of the tree? Then we get a
-# much too small subsample!
-def sample_connected_subgraph(G: nx.Graph, max_nodes: int = 200) -> nx.Graph:
+def sample_connected_subgraph(
+    G: nx.Graph,
+    min_nodes: int = 100,
+    max_nodes: int = 200,
+    max_attempts: int = 10
+) -> nx.Graph:
     """
-    Sample a connected subgraph of maximum size from a larger graph using BFS.
+    Sample a connected subgraph of up to `max_nodes` nodes using BFS from a
+    random seed.
+
+    Retries if the sampled component is smaller than `min_nodes`.
 
     Parameters
     ----------
     G : nx.Graph
-        Input graph (directed or undirected).
+        Input graph.
+    min_nodes : int
+        Minimum number of nodes required in the sampled subgraph. Default is
+        100.
     max_nodes : int
-        Maximum number of nodes to include in the sample. Default is 200.
+        Maximum number of nodes allowed in the sampled subgraph. Default is
+        200.
+    max_attempts : int
+        Number of retry attempts if the sampled subgraph is too small. Default
+        is 10.
 
     Returns
     -------
     nx.Graph
-        Subgraph induced by sampled nodes.
+        Subgraph induced by the sampled nodes.
+
+    Raises
+    ------
+    RuntimeError
+        If a sufficiently large subgraph cannot be found after `max_attempts`.
     """
-    # Use BFS from a random seed node
-    start = np.random.choice(list(G.nodes))
-    visited: set[np.float64] = set()
-    queue = [start]
-    while queue and len(visited) < max_nodes:
-        node = queue.pop(0)
-        if node not in visited:
-            visited.add(node)
-            queue.extend(n for n in G.neighbors(node) if n not in visited)
-    return G.subgraph(visited).copy()
+    nodes = list(G.nodes)
+    if len(nodes) < min_nodes:
+        raise ValueError(
+            f"Graph has only {len(nodes)} nodes, which is less than"
+            f" min_nodes = {min_nodes}."
+        )
+
+    for _ in range(max_attempts):
+        start = np.random.choice(nodes)
+        visited: set[np.float64] = set()
+        queue = [start]
+
+        while queue and len(visited) < max_nodes:
+            node = queue.pop(0)
+            if node not in visited:
+                visited.add(node)
+                queue.extend(n for n in G.neighbors(node) if n not in visited)
+
+        if len(visited) >= min_nodes:
+            return G.subgraph(visited).copy()
+
+    raise RuntimeError(
+        f"Failed to sample a connected subgraph with at least {min_nodes} "
+        f"nodes after {max_attempts} attempts."
+    )
 
 
 def compute_network_statistics(

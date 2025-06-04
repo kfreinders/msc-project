@@ -132,8 +132,6 @@ def main() -> None:
     )
 
     # Save the trained model
-    # TODO: save existing regressor.pt as "regressor-n.pt" and save current
-
     save_with_versioning(trained_model, "../data/dnn/regressor.pt", logger)
 
     os.makedirs("../data/dnn", exist_ok=True)
