@@ -119,19 +119,27 @@ validate_parameters <- function(df, param_bounds) {
 #    RESUMING PRODUCTION RUNS                                                  #
 #------------------------------------------------------------------------------#
 
-resume_or_generate_parameters <- function(n_sim, param_bounds, output_folder, paramsets_file, plot_file) {
+resume_or_generate_parameters <- function(
+  n_sim,
+  param_bounds,
+  output_folder,
+  paramsets_file,
+  plot_file
+) {
   if (file.exists(paramsets_file)) {
     cat(sprintf("Existing master file found at '%s'\n", paramsets_file))
     df <- fread(paramsets_file)
 
     existing_files <- list.files(output_folder, pattern = "^inftable_\\d{10}_mapped\\.parquet$")
-    # TODO: regex instead of substring
-    completed_seeds <- as.integer(substr(existing_files, 10, 19))
+    completed_seeds <- as.integer(
+      sub("^inftable_(\\d{10})_mapped\\.parquet$", "\\1", existing_files)
+    )
     df <- df[!(df$seed %in% completed_seeds), ]
 
-    cat(sprintf("Resuming run with %d remaining simulations\n", nrow(df)))
 
-    if (nrow(df) == 0) {
+    if (nrow(df) > 0) {
+      cat(sprintf("Resuming run with %d remaining simulations\n", nrow(df)))
+    } else {
       cat("All simulations already completed. Nothing to do.\n")
       quit(save = "no")
     }
