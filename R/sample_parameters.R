@@ -126,6 +126,8 @@ resume_or_generate_parameters <- function(
   paramsets_file,
   plot_file
 ) {
+  # Resume simulations by comparing existing Parquet files with the seeds in
+  # `paramsets_file`, if it exists
   if (file.exists(paramsets_file)) {
     cat(sprintf("Existing master file found at '%s'\n", paramsets_file))
     df <- fread(paramsets_file)
@@ -136,9 +138,11 @@ resume_or_generate_parameters <- function(
     )
     df <- df[!(df$seed %in% completed_seeds), ]
 
-
     if (nrow(df) > 0) {
-      cat(sprintf("Resuming run with %d remaining simulations\n", nrow(df)))
+      cat(sprintf(
+        "Resuming run with %s remaining simulations\n",
+        format(n_sim, big.mark = ",", decimal.mark = ".", scientific = FALSE)
+      ))
     } else {
       cat("All simulations already completed. Nothing to do.\n")
       quit(save = "no")
@@ -147,13 +151,17 @@ resume_or_generate_parameters <- function(
     return(df)
   }
 
+  # If `paramsets_file` does not exist, create a new parameter set
   print_section("GENERATING PARAMETER DISTRIBUTIONS")
   # Normalize param_bounds to 2-element vector to handle fixed values
   param_bounds <- normalize_param_bounds(param_bounds)
   df <- generate_parameters(n_sim, param_bounds)
   print_param_bounds(param_bounds)
   validate_parameters(df, param_bounds)
-  cat(sprintf("Successfully generated %d unique parameter sets\n", n_sim))
+  cat(sprintf(
+    "Successfully generated %s unique parameter sets\n",
+    format(n_sim, big.mark = ",", decimal.mark = ".", scientific = FALSE)
+  ))
 
   if (!dir.exists(output_folder)) dir.create(output_folder, recursive = TRUE)
   write.csv(df, paramsets_file, row.names = FALSE)
