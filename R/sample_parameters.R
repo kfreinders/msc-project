@@ -2,19 +2,25 @@
 #    PARAMETER SET GENERATION                                                  #
 #------------------------------------------------------------------------------#
 
-# FIXME: handling of ranges vs fixed values
+normalize_param_bounds <- function(param_bounds) {
+  lapply(param_bounds, function(x) {
+    if (length(x) == 1) rep(x, 2) else x
+  })
+}
+
 generate_parameters <- function(amount, param_bounds) {
   # Ensure `amount` is a valid positive integer
   if (!is.numeric(amount) || amount <= 0 || amount != as.integer(amount)) {
     stop("Error: `amount` must be a positive integer.")
   }
 
+  # Validate bounds
   validate_bounds(param_bounds)
 
   # Identify variable and fixed parameters
-  is_fixed <- map_lgl(param_bounds, ~ .x[1] == .x[2])
+  is_fixed <- vapply(param_bounds, function(x) x[1] == x[2], logical(1))
   variable_bounds <- param_bounds[!is_fixed]
-  fixed_values <- map(param_bounds[is_fixed], ~ rep(.x[1], amount))
+  fixed_values <- lapply(param_bounds[is_fixed], function(x) rep(x[1], amount))
 
   # Latin Hypercube Sampling for variable parameters
   if (length(variable_bounds) > 0) {
@@ -22,12 +28,12 @@ generate_parameters <- function(amount, param_bounds) {
     lhs_matrix <- randomLHS(amount, num_vars)
 
     # Scale each column to its corresponding bounds
-    scaled_vars <- map2_dfc(
-      as.data.frame(lhs_matrix),
-      variable_bounds,
-      ~ .x * diff(.y) + .y[1]
+    scaled_vars <- Map(
+      function(col, bounds) col * diff(bounds) + bounds[1],
+      as.data.frame(lhs_matrix), variable_bounds
     )
 
+    scaled_vars <- as.data.frame(scaled_vars)
     names(scaled_vars) <- names(variable_bounds)
   } else {
     scaled_vars <- data.frame()
@@ -39,7 +45,8 @@ generate_parameters <- function(amount, param_bounds) {
   } else {
     data.frame(row.names = seq_len(amount))  # empty df with correct row count
   }
-    df <- cbind(scaled_vars, df_fixed)
+
+  df <- cbind(scaled_vars, df_fixed)
 
   # Ensure original parameter order is preserved
   df <- df[names(param_bounds)]
@@ -54,22 +61,24 @@ generate_parameters <- function(amount, param_bounds) {
 #    PARAMETER SET VALIDATION FUNCTION                                         #
 #------------------------------------------------------------------------------#
 
-# TODO: validate that input is numeric
 validate_bounds <- function(param_bounds) {
   for (param in names(param_bounds)) {
     bounds <- param_bounds[[param]]
 
-    # Make sure we have both a left and right bound, also for fixed values
-    if (length(bounds) != 2) {
+    # Check: numeric and length 2
+    if (!is.numeric(bounds) || length(bounds) != 2) {
       stop(sprintf(
-        "Error: missing bounds for parameter `%s`. If you intended a fixed value, set left bound = right bound.",
+        "Error: parameter `%s` must be a numeric vector of length 2. Use c(x, x) for fixed values.",
         param
       ))
     }
 
-    # Make sure left bound <= right bound
+    # Check: left bound <= right bound
     if (bounds[1] > bounds[2]) {
-      stop("Error: left bound greater than right bound.")
+      stop(sprintf(
+        "Error: for parameter `%s`, lower bound (%g) is greater than upper bound (%g).",
+        param, bounds[1], bounds[2]
+      ))
     }
   }
 }
@@ -78,28 +87,29 @@ validate_parameters <- function(df, param_bounds) {
   if (any(duplicated(df$seed))) {
     stop("Error: Duplicate seeds detected! Re-generate seeds with unique values.")
   }
-  
+
+
   # Ensure no NA values
   if (any(is.na(df))) {
     stop("Error: NA values in sampled parameters.")
   }
-  
+
   # Ensure all values are within expected ranges
   for (param in names(param_bounds)) {
     bounds <- param_bounds[[param]]
 
-    # Handle range
-    if (bounds[1] != bounds[2]) {
-      min_val <- bounds[1]
-      max_val <- bounds[2]
-      if (any(df[[param]] < min_val | df[[param]] > max_val)) {
-        stop(paste("Error: Values out of range for", param))
+    min_val <- bounds[1]
+    max_val <- bounds[2]
+
+    if (min_val == max_val) {
+      # Fixed parameter
+      if (any(df[[param]] != min_val)) {
+        stop(sprintf("Error: Parameter `%s` should be fixed at %g, but has deviating values.", param, min_val))
       }
-    # TODO: Handle fixed value; dead code?
     } else {
-      fixed_val <- bounds[1]
-      if (any(df[[param]] != fixed_val)) {
-        stop(paste("Error: Values out of range for", param))
+      # Ranged parameter
+      if (any(df[[param]] < min_val | df[[param]] > max_val)) {
+        stop(sprintf("Error: Parameter `%s` has values outside the range [%g, %g].", param, min_val, max_val))
       }
     }
   }
@@ -130,9 +140,10 @@ resume_or_generate_parameters <- function(n_sim, param_bounds, output_folder, pa
   }
 
   print_section("GENERATING PARAMETER DISTRIBUTIONS")
-  print_param_bounds(param_bounds)
-
+  # Normalize param_bounds to 2-element vector to handle fixed values
+  param_bounds <- normalize_param_bounds(param_bounds)
   df <- generate_parameters(n_sim, param_bounds)
+  print_param_bounds(param_bounds)
   validate_parameters(df, param_bounds)
   cat(sprintf("Successfully generated %d unique parameter sets\n", n_sim))
 
