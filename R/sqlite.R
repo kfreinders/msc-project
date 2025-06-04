@@ -51,8 +51,13 @@ initialize_db <- function(db_name) {
 
 # Function to write summary statistics
 write_summary_statistics <- function(db, seed, summary_stats) {
+  # Number of attempts settings
   attempt <- 1 
   max_attempts <- 5
+
+  # Exponential backoff settings
+  base_delay <- 0.2
+  max_jitter <- 0.3
     
   # Retry writing to db until successful or until we exceed max_attempts
   while (attempt <= max_attempts) {
@@ -76,8 +81,9 @@ write_summary_statistics <- function(db, seed, summary_stats) {
     return(TRUE)
     }, error = function(e) {
       if (grepl("database is locked", e$message)) {
-        # FIXME: fixed time and make backoff actually exponential
-        Sys.sleep(runif(1, 0.1, 0.5) * attempt)  # Exponential backoff
+        # Exponential backoff with jitter in case of SQLite locks
+        sleep_time <- (2 ^ (attempt - 1)) * base_delay + runif(1, 0, max_jitter)
+        Sys.sleep(sleep_time)
         attempt <- attempt + 1
       } else {
         message("ERROR: Failed to write summary stats for seed ", seed, " | Cause: ", e$message)
