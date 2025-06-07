@@ -1,9 +1,16 @@
-from typing import Callable, Sequence
+from collections import deque
+import logging
+from typing import Any, Callable, Union, Sequence
 import numpy as np
 import pandas as pd
 import networkx as nx
 
 from .simulation_loader import NosoiSimulation
+from utils.logging_config import setup_logging
+
+
+def get_logger():
+    return logging.getLogger(__name__)
 
 
 def safe_stat(
@@ -234,13 +241,15 @@ def sample_connected_subgraph(
     G: nx.Graph,
     min_nodes: int = 100,
     max_nodes: int = 200,
-    max_attempts: int = 10
+    max_attempts: int = 10,
+    seed: Union[int, np.random.Generator, None] = None
 ) -> nx.Graph:
     """
-    Sample a connected subgraph of up to `max_nodes` nodes using BFS from a
-    random seed.
+    Sample a connected subgraph of G.
 
-    Retries if the sampled component is smaller than `min_nodes`.
+    Uses BFS from a random seed. Retries up to `max_attempts` if the sampled
+    component is smaller than `min_nodes`, and traverses the full graph only as
+    fallback.
 
     Parameters
     ----------
@@ -255,6 +264,8 @@ def sample_connected_subgraph(
     max_attempts : int
         Number of retry attempts if the sampled subgraph is too small. Default
         is 10.
+    seed : int, np.random.Generator, or None
+        Random seed or generator for reproducibility. Default is None.
 
     Returns
     -------
@@ -266,20 +277,28 @@ def sample_connected_subgraph(
     RuntimeError
         If a sufficiently large subgraph cannot be found after `max_attempts`.
     """
+    logger = get_logger()
+
     nodes = list(G.nodes)
     if len(nodes) < min_nodes:
         raise ValueError(
-            f"Graph has only {len(nodes)} nodes, which is less than"
+            f"Graph has only {len(nodes)} nodes, which is less than "
             f" min_nodes = {min_nodes}."
         )
 
+    # Normalize the seed to a random Generator
+    rng = (
+        seed if isinstance(seed, np.random.Generator)
+        else np.random.default_rng(seed)
+    )
+
     for _ in range(max_attempts):
-        start = np.random.choice(nodes)
-        visited: set[np.float64] = set()
-        queue = [start]
+        start = rng.choice(nodes)
+        visited: set[Any] = set()
+        queue = deque([start])
 
         while queue and len(visited) < max_nodes:
-            node = queue.pop(0)
+            node = queue.popleft()
             if node not in visited:
                 visited.add(node)
                 queue.extend(n for n in G.neighbors(node) if n not in visited)
@@ -287,10 +306,13 @@ def sample_connected_subgraph(
         if len(visited) >= min_nodes:
             return G.subgraph(visited).copy()
 
-    raise RuntimeError(
+    logger.warning(
         f"Failed to sample a connected subgraph with at least {min_nodes} "
         f"nodes after {max_attempts} attempts."
     )
+
+    largest_cc = max(nx.connected_components(G), key=len)
+    return G.subgraph(largest_cc).copy()
 
 
 def compute_network_statistics(
