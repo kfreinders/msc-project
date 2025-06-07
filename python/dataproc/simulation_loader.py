@@ -3,9 +3,12 @@ from functools import cached_property
 from typing import Optional
 
 import networkx as nx
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
+
+from .parquet import extract_seed
 
 
 @dataclass
@@ -18,6 +21,7 @@ class NosoiSimulation:
     """
     df: pd.DataFrame
     metadata: dict[str, float]
+    seed: int
     _graph: Optional[nx.DiGraph] = field(default=None, init=False, repr=False)
 
     @cached_property
@@ -72,7 +76,9 @@ class NosoiSimulation:
         for k, v in table.schema.metadata.items():
             metadata[k.decode()] = float(v.decode())
 
-        return cls(df=df, metadata=metadata)
+        seed = extract_seed(Path(parquet_path))
+
+        return cls(df=df, metadata=metadata, seed=seed)
 
     @staticmethod
     def _reconstruct_hosts_ID(df: pd.DataFrame) -> pd.DataFrame:

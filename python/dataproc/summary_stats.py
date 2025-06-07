@@ -239,6 +239,7 @@ def compute_runtime_fraction(simulation: NosoiSimulation) -> dict[str, float]:
 
 def sample_connected_subgraph(
     G: nx.Graph,
+    sim_seed: int,
     min_nodes: int = 100,
     max_nodes: int = 200,
     max_attempts: int = 10,
@@ -255,6 +256,8 @@ def sample_connected_subgraph(
     ----------
     G : nx.Graph
         Input graph.
+    sim_seed: int
+        Seed of the nosoi simulation, for logging purposes.
     min_nodes : int
         Minimum number of nodes required in the sampled subgraph. Default is
         100.
@@ -307,8 +310,8 @@ def sample_connected_subgraph(
             return G.subgraph(visited).copy()
 
     logger.warning(
-        f"Failed to sample a connected subgraph with at least {min_nodes} "
-        f"nodes after {max_attempts} attempts."
+        f"Failed to sample a connected subgraph for seed {sim_seed} with at "
+        f"least {min_nodes} nodes after {max_attempts} attempts."
     )
 
     largest_cc = max(nx.connected_components(G), key=len)
@@ -370,7 +373,7 @@ def compute_network_statistics(
     ego_sizes = [len(G[n]) + 1 for n in G.nodes]
 
     sampled = (
-        sample_connected_subgraph(undirected, max_nodes)
+        sample_connected_subgraph(undirected, simulation.seed, max_nodes)
         if G.number_of_nodes() > max_nodes
         else undirected
     )
