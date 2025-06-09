@@ -56,7 +56,7 @@ def apply_single_level(
             # Skip simulations with too few hosts
             if sim.n_hosts < 2000:
                 logger.info(
-                    f"Simulation with seed {seed} has too few hosts "
+                    f"Simulation with seed {seed:010} has too few hosts "
                     f"({sim.n_hosts} < 2000). Skipping..."
                 )
                 continue
@@ -64,7 +64,7 @@ def apply_single_level(
             degraded_graph = strategy.apply(sim.as_graph())
             sim._graph = degraded_graph
             stats_df = compute_summary_statistics(sim)
-            logger.debug(f"Stats computed for seed {seed}")
+            logger.debug(f"Stats computed for seed {seed:010}")
 
             if not stats_df.empty:
                 stats_df.insert(0, "SEED", seed)
