@@ -2,7 +2,6 @@ import numpy as np
 from pathlib import Path
 import logging
 from multiprocessing import Pool
-import pandas as pd
 
 from dataproc.simulation_loader import NosoiSimulation
 from dataproc.scarcity_strategies import DataScarcityStrategy, RandomNodeDrop
@@ -44,7 +43,9 @@ def apply_single_level(
     logger.info(f"Applying scarcity level {level:.2f} to files in {root_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"scarce_{level:.2f}.csv"
-    results = []
+
+    # Track whether to write the header
+    first_write = True
 
     for file in find_parquet_files(root_dir):
         try:
@@ -58,22 +59,14 @@ def apply_single_level(
 
             if not stats_df.empty:
                 stats_df.insert(0, "SEED", seed)
-                results.append(stats_df)
+                stats_df.to_csv(output_path, mode='a', header=first_write, index=False)
+                first_write = False  # Only write header on first iteration
             else:
                 logger.warning(f"Empty stats for {file.name}, skipping.")
         except Exception as e:
             logger.error(
                 f"Skipping {file.name} due to error: {e}", exc_info=True
             )
-
-    if results:
-        full_df = pd.concat(results, ignore_index=True)
-        full_df.to_csv(output_path, index=False)
-        logger.debug(f"Written summary statistics to: {output_path}")
-    else:
-        logger.warning(
-            f"No results written for level {level:.2f}, no successful files."
-        )
 
 
 def _apply_level(args):
