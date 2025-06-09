@@ -52,6 +52,15 @@ def apply_single_level(
             logger.debug(f"Processing file: {file.name}")
             seed = extract_seed(file)
             sim = NosoiSimulation.from_parquet(str(file))
+
+            # Skip simulations with too few hosts
+            if sim.n_hosts < 2000:
+                logger.info(
+                    f"Simulation with seed {seed} has too few hosts "
+                    f"({sim.n_hosts} < 2000). Skipping..."
+                )
+                continue
+
             degraded_graph = strategy.apply(sim.as_graph())
             sim._graph = degraded_graph
             stats_df = compute_summary_statistics(sim)
