@@ -473,3 +473,59 @@ class NosoiDataProcessor:
         test.save("test", output_dir)
 
         return train, val, test
+
+    @staticmethod
+    def prepare_for_scarcity(
+        scarce_csv: Path,
+        master_csv: Path = Path("data/nosoi/master.csv"),
+        ptrain: float = 0.7,
+        pval: float = 0.15,
+        seed: Optional[int] = 42
+    ) -> Path:
+        """
+        Prepare train/validation/test splits for a given scarcity-level dataset.
+
+        This function takes a summary statistics CSV generated from a transmission
+        chain with a specific level of artificial data loss (e.g., random node
+        removal), merges it with the original simulation parameters (from master.csv),
+        computes raw and transformed features, and splits the data into training,
+        validation, and test sets. The resulting splits are saved to disk in a
+        subdirectory named after the scarcity level.
+
+        Parameters
+        ----------
+        scarce_csv : Path
+            Path to the summary statistics CSV for a specific scarcity level
+            (e.g., 'data/scarce_stats/scarce_0.25.csv').
+
+        master_csv : Path, optional
+            Path to the master file containing original simulation parameters
+            (default is 'data/nosoi/master.csv').
+
+        ptrain : float, optional
+            Proportion of data to allocate to the training set (default is 0.7).
+
+        pval : float, optional
+            Proportion of data to allocate to the validation set (default is 0.15).
+
+        seed : int | None, optional
+            Random seed for reproducible splitting (default is 42).
+
+        Returns
+        -------
+        Path
+            The directory where the train/val/test splits are saved (e.g.,
+            'data/splits/scarce_0.25').
+        """
+        level = Path(scarce_csv).stem
+        split_dir = Path("data/splits") / level
+        NosoiDataProcessor.prepare_nosoi_data(
+            summary_stats_csv=scarce_csv,
+            master_csv=master_csv,
+            output_dir=split_dir,
+            ptrain=ptrain,
+            pval=pval,
+            seed=seed,
+            overwrite=True,
+        )
+        return split_dir
