@@ -6,7 +6,7 @@ from multiprocessing import Pool
 from dataproc.simulation_loader import NosoiSimulation
 from dataproc.scarcity_strategies import DataScarcityStrategy, RandomNodeDrop
 from dataproc.summary_stats import compute_summary_statistics
-from dataproc.parquet import find_parquet_files, extract_seed
+from dataproc.parquet import find_parquet_files, extract_seed, peek_host_count
 from utils.logging_config import setup_logging
 
 
@@ -18,7 +18,8 @@ def apply_single_level(
     root_dir: Path,
     strategy: DataScarcityStrategy,
     level: float,
-    output_dir: Path
+    output_dir: Path,
+    min_hosts: int = 2_000
 ) -> None:
     """
     Apply a single data scarcity strategy to all .parquet files in a directory.
@@ -38,6 +39,9 @@ def apply_single_level(
         The fraction of data to drop, used in output filename.
     output_dir : Path
         Directory to save the output CSV file.
+    min_hosts : in
+        Only include transmission chains with at least this minimum number of
+        hosts.
     """
     logger = get_logger()
     logger.info(f"Applying scarcity level {level:.2f} to files in {root_dir}")
@@ -49,34 +53,35 @@ def apply_single_level(
 
     for file in find_parquet_files(root_dir):
         try:
-            logger.debug(f"Processing file: {file.name}")
-            seed = extract_seed(file)
-            sim = NosoiSimulation.from_parquet(file)
-
             # Skip simulations with too few hosts
-            if sim.n_hosts < 2000:
+            host_count = peek_host_count(file)
+            if host_count < min_hosts:
                 logger.info(
-                    f"Simulation with seed {seed:010} has too few hosts "
-                    f"({sim.n_hosts} < 2000). Skipping..."
+                    f"Skipping seed {file.name} ({host_count} < {min_hosts})."
                 )
                 continue
 
-            degraded_graph = strategy.apply(sim.graph)
-            sim._graph = degraded_graph
-            stats_df = compute_summary_statistics(sim)
-            logger.debug(f"Stats computed for seed {seed:010}")
+            seed = extract_seed(file)
+            sim = NosoiSimulation.from_parquet(file)
 
-            if not stats_df.empty:
-                stats_df.insert(0, "seed", seed)
-                stats_df.to_csv(
-                    output_path, mode="a", header=first_write, index=False
-                )
-                first_write = False  # Only write header on first iteration
-            else:
-                logger.warning(f"Empty stats for {file.name}, skipping.")
+            # Apply degradation & recompute summary statistics
+            sim.graph = strategy.apply(sim.graph)
+            stats_df = compute_summary_statistics(sim)
+
+            if stats_df.empty:
+                logger.warning("No stats for %s, skipping.", file.name)
+                continue
+
+            stats_df.insert(0, "seed", seed)
+            stats_df.to_csv(
+                output_path, mode="a", header=first_write, index=False
+            )
+            first_write = False  # Only write header on first iteration
+            logger.debug("Appended stats for seed %010d", seed)
+
         except Exception as e:
             logger.error(
-                f"Skipping {file.name} due to error: {e}", exc_info=True
+                f"Error processing {file.name}: {e}", exc_info=True
             )
 
 
