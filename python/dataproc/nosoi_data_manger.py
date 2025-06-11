@@ -371,8 +371,12 @@ class NosoiDataProcessor:
             return torch.tensor(array[idx], dtype=torch.float32)
 
         # Column names for raw features and targets
-        x_raw_cols = [col for col in self.df.columns if col.startswith("RAW_SST_")]
-        y_raw_cols = [col for col in self.df.columns if col.startswith("RAW_PAR_")]
+        x_raw_cols = [
+            col for col in self.df.columns if col.startswith("RAW_SST_")
+        ]
+        y_raw_cols = [
+            col for col in self.df.columns if col.startswith("RAW_PAR_")
+        ]
         x_raw_names = [col.removeprefix("RAW_") for col in x_raw_cols]
         y_raw_names = [col.removeprefix("RAW_") for col in y_raw_cols]
 
@@ -405,7 +409,6 @@ class NosoiDataProcessor:
 
         # Return named splits
         return split_train, split_val, split_test
-
 
     @staticmethod
     def prepare_nosoi_data(
@@ -483,14 +486,14 @@ class NosoiDataProcessor:
         seed: Optional[int] = 42
     ) -> Path:
         """
-        Prepare train/validation/test splits for a given scarcity-level dataset.
+        Prepare three-way split for a given scarcity-level dataset.
 
-        This function takes a summary statistics CSV generated from a transmission
-        chain with a specific level of artificial data loss (e.g., random node
-        removal), merges it with the original simulation parameters (from master.csv),
-        computes raw and transformed features, and splits the data into training,
-        validation, and test sets. The resulting splits are saved to disk in a
-        subdirectory named after the scarcity level.
+        This function takes a summary statistics CSV generated from a
+        transmission chain with a specific level of artificial data loss (e.g.,
+        random node removal), merges it with the original simulation parameters
+        (from master.csv), computes raw and transformed features, and splits
+        the data into training, validation, and test sets. The resulting splits
+        are saved to disk in a subdirectory named after the scarcity level.
 
         Parameters
         ----------
@@ -503,10 +506,12 @@ class NosoiDataProcessor:
             (default is 'data/nosoi/master.csv').
 
         ptrain : float, optional
-            Proportion of data to allocate to the training set (default is 0.7).
+            Proportion of data to allocate to the training set (default is
+            0.7).
 
         pval : float, optional
-            Proportion of data to allocate to the validation set (default is 0.15).
+            Proportion of data to allocate to the validation set (default is
+            0.15).
 
         seed : int | None, optional
             Random seed for reproducible splitting (default is 42).
