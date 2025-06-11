@@ -192,8 +192,6 @@ def plot_scarce_distributions(csv_path: Path):
     ----------
     csv_path : Path
         Path to the scarce CSV file.
-    bins : int
-        Number of bins to use in histograms.
     """
     df = pd.read_csv(csv_path)
     df = df.loc[:, df.columns != "seed"]  # Drop seed column
