@@ -90,6 +90,13 @@ class NosoiDataProcessor:
         master_df = pd.read_csv(self.master_csv)
 
         # Inner join the dfs on the simulation seed
+        if "seed" not in summary_df.columns:
+            raise ValueError(
+                f"'seed' column missing in {self.summary_stats_csv}"
+            )
+        if "seed" not in master_df.columns:
+            raise ValueError(f"'seed' column missing in {self.master_csv}")
+
         merged_df = pd.merge(summary_df, master_df, on="seed", how="inner")
 
         # Make a copy of all the raw data
@@ -140,7 +147,7 @@ class NosoiDataProcessor:
         ----------
         filter_fn : Callable[[pd.DataFrame], pd.Series]
             A function that takes the full merged DataFrame and returns a
-            Boolean mask of rows to retain (e.g., `df["PAR_SS_11"] > 2000`).
+            Boolean mask of rows to retain (e.g., `df["SST_06"] > 2000`).
 
         filter_fn_desc : str, optional
             A description of the filtering condition for logging purposes.
@@ -448,7 +455,7 @@ def prepare_nosoi_data(
     transform_map = {"PAR_p_fatal": np.log}
 
     manager = NosoiDataProcessor(summary_stats_csv, master_csv)
-    manager.drop_by_filter(lambda df: df["SST_11"] > 2000, "SST_11 > 2000")
+    manager.drop_by_filter(lambda df: df["SST_06"] > 2000, "SST_06 > 2000")
     manager.apply_infectivity()
     manager.apply_target_transforms(transform_map)
     train, val, test = manager.split_data(ptrain, pval, seed)
