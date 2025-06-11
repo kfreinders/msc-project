@@ -2,6 +2,9 @@ import matplotlib.pyplot as plt
 import matplotlib.figure
 import numpy as np
 import os
+import pandas as pd
+from pathlib import Path
+import seaborn as sns
 import torch
 from typing import Optional
 import logging
@@ -179,6 +182,42 @@ def plot_predictions(
         cbar.set_label(color_label)
 
     return fig
+
+
+def plot_scarce_distributions(csv_path: Path):
+    """
+    Plot histograms for all SST_* columns in a scarce CSV file.
+
+    Parameters
+    ----------
+    csv_path : Path
+        Path to the scarce CSV file.
+    bins : int
+        Number of bins to use in histograms.
+    """
+    df = pd.read_csv(csv_path)
+    df = df.loc[:, df.columns != "seed"]  # Drop seed column
+
+    num_cols = len(df.columns)
+    ncols = 6
+    nrows = -(-num_cols // ncols)  # Ceiling division
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 3, nrows * 2.5))
+    axes = axes.flatten()
+
+    for i, col in enumerate(df.columns):
+        sns.histplot(df[col].dropna(), ax=axes[i], kde=False)
+        axes[i].set_title(col, fontsize=9)
+        axes[i].tick_params(axis="x", labelsize=8)
+        axes[i].tick_params(axis="y", labelsize=8)
+
+    # Turn off unused subplots
+    for j in range(len(df.columns), len(axes)):
+        axes[j].axis("off")
+
+    fig.suptitle(f"Distributions from {csv_path.name}", fontsize=14)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.show()
 
 
 def save_torch_with_versioning(
