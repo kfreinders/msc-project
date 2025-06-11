@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=create_scarce_data
-#SBATCH --time=02-00:00:00
+#SBATCH --time=02-02:00:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=8GB
