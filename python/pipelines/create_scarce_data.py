@@ -51,7 +51,7 @@ def apply_single_level(
         try:
             logger.debug(f"Processing file: {file.name}")
             seed = extract_seed(file)
-            sim = NosoiSimulation.from_parquet(str(file))
+            sim = NosoiSimulation.from_parquet(file)
 
             # Skip simulations with too few hosts
             if sim.n_hosts < 2000:
@@ -61,14 +61,16 @@ def apply_single_level(
                 )
                 continue
 
-            degraded_graph = strategy.apply(sim.as_graph())
+            degraded_graph = strategy.apply(sim.graph)
             sim._graph = degraded_graph
             stats_df = compute_summary_statistics(sim)
             logger.debug(f"Stats computed for seed {seed:010}")
 
             if not stats_df.empty:
                 stats_df.insert(0, "seed", seed)
-                stats_df.to_csv(output_path, mode='a', header=first_write, index=False)
+                stats_df.to_csv(
+                    output_path, mode="a", header=first_write, index=False
+                )
                 first_write = False  # Only write header on first iteration
             else:
                 logger.warning(f"Empty stats for {file.name}, skipping.")
