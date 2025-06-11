@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
+from pathlib import Path
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -68,7 +69,7 @@ class NosoiSplit:
         dataset = TensorDataset(self.X, self.y)
         return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
-    def save(self, name: str, output_dir: str) -> None:
+    def save(self, name: str, output_dir: Path) -> None:
         """
         Save the split to disk, including both processed and raw data.
 
@@ -79,7 +80,7 @@ class NosoiSplit:
         ----------
         name : str
             Prefix for the output files (e.g., 'train', 'val', 'test').
-        output_dir : str
+        output_dir : Path
             Directory where the files will be saved.
         """
         os.makedirs(output_dir, exist_ok=True)
@@ -106,7 +107,7 @@ class NosoiSplit:
     def load(
         cls,
         name: str,
-        input_dir: str,
+        input_dir: Path,
         device: Optional[torch.device] = None
     ) -> "NosoiSplit":
         """
@@ -119,7 +120,7 @@ class NosoiSplit:
         ----------
         name : str
             Prefix of the saved files to load (e.g., 'train', 'val', 'test').
-        input_dir : str
+        input_dir : Path
             Directory containing the saved files.
         device : torch.device, optional
             Device to map tensors to (e.g., 'cpu', 'cuda'). Defaults to CPU.

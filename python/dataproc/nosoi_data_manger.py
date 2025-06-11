@@ -1,9 +1,9 @@
-import os
 import logging
 from typing import Callable, Optional
 
 import numpy as np
 import pandas as pd
+from pathlib import Path
 import torch
 from torch.utils.data import TensorDataset
 from sklearn.preprocessing import StandardScaler
@@ -23,11 +23,11 @@ class NosoiDataProcessor:
     """
     def __init__(
         self,
-        summary_stats_csv: str,
-        master_csv: str,
+        summary_stats_csv: Path,
+        master_csv: Path,
     ) -> None:
-        self.summary_stats_csv = summary_stats_csv
-        self.master_csv = master_csv
+        self.summary_stats_csv = Path(summary_stats_csv)
+        self.master_csv = Path(master_csv)
 
         # Core dataframe
         self.df: pd.DataFrame
@@ -396,9 +396,9 @@ class NosoiDataProcessor:
 
 
 def prepare_nosoi_data(
-    summary_stats_csv: str,
-    master_csv: str,
-    output_dir: str = "data/splits",
+    summary_stats_csv: Path,
+    master_csv: Path,
+    output_dir: Path = Path("data/splits"),
     ptrain: float = 0.7,
     pval: float = 0.15,
     seed: Optional[int] = None,
@@ -409,11 +409,11 @@ def prepare_nosoi_data(
 
     Parameters
     ----------
-    summary_stats_csv : str
+    summary_stats_csv : Path
         Path to the summary statistics CSV.
-    master_csv : str
+    master_csv : Path
         Path to the master parameter CSV.
-    output_dir : str, optional
+    output_dir : Path, optional
         Directory where the splits are stored. Default is 'data/splits'.
     ptrain : float, optional
         Proportion of data to allocate to training set. Default is 0.7.
@@ -432,32 +432,25 @@ def prepare_nosoi_data(
     setup_logging("data preprocessing")
     logger = logging.getLogger(__name__)
 
-    if not overwrite and all(
-        os.path.exists(os.path.join(output_dir, f"{split}_{ext}"))
-        for split in ("train", "val", "test")
-        for ext in ("x.pt", "y.pt", "raw.npz")
-    ):
+    output_dir = Path(output_dir)
+    split_files = [output_dir / f"{split}_{ext}" for split in ("train", "val", "test") for ext in ("x.pt", "y.pt", "raw.npz")]
+
+    if not overwrite and all(f.exists() for f in split_files):
         logger.info("Found existing split files. Loading from disk...")
-        train = NosoiSplit.load("train", output_dir)
-        val = NosoiSplit.load("val", output_dir)
-        test = NosoiSplit.load("test", output_dir)
-        return train, val, test
+        return (
+            NosoiSplit.load("train", output_dir),
+            NosoiSplit.load("val", output_dir),
+            NosoiSplit.load("test", output_dir),
+        )
 
     logger.info("Generating data splits from raw files...")
 
-    def log_transform(x: np.ndarray) -> np.ndarray:
-        return np.log(x)
-
-    transform_map = {
-        "PAR_p_fatal": log_transform
-    }
+    transform_map = {"PAR_p_fatal": np.log}
 
     manager = NosoiDataProcessor(summary_stats_csv, master_csv)
-
     manager.drop_by_filter(lambda df: df["SST_11"] > 2000, "SST_11 > 2000")
     manager.apply_infectivity()
     manager.apply_target_transforms(transform_map)
-
     train, val, test = manager.split_data(ptrain, pval, seed)
 
     train.save("train", output_dir)
