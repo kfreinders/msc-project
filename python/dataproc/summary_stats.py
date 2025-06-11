@@ -353,7 +353,7 @@ def compute_network_statistics(
         - SST_24: Overall ease of infection spreading across the network
           (global efficiency).
     """
-    G = simulation.as_graph()
+    G = simulation.graph
 
     # Early return on single-node graph
     if G.number_of_nodes() == 1:
