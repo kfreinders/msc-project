@@ -17,12 +17,12 @@ class NosoiSimulation:
     Container for a single nosoi simulation result, including:
     - the transmission table (as a pandas DataFrame)
     - simulation metadata (from Parquet file schema)
-    - a lazily constructed NetworkX directed graph representation of the chain
+    - a NetworkX directed graph representation of the transmission chain
     """
-    _df: pd.DataFrame
-    _graph: Optional[nx.DiGraph] = field(default=None, init=False, repr=False)
     metadata: dict[str, float]
     seed: int
+    _df: pd.DataFrame
+    _graph: Optional[nx.DiGraph] = field(default=None, init=False, repr=False)
 
     @property
     def df(self) -> pd.DataFrame:
@@ -30,9 +30,9 @@ class NosoiSimulation:
 
     @df.setter
     def df(self, new_df: pd.DataFrame):
-        print("entered df.setter!")
         self._df = new_df
         self._graph = self._df_to_graph()
+        self._invalidate_caches()
 
     @property
     def graph(self) -> nx.DiGraph:
@@ -42,9 +42,9 @@ class NosoiSimulation:
 
     @graph.setter
     def graph(self, new_graph: nx.DiGraph):
-        print("entered graph.setter!")
         self._graph = new_graph
         self._df = self._graph_to_df(new_graph)
+        self._invalidate_caches()
 
     @cached_property
     def simtime(self) -> float:
@@ -70,6 +70,13 @@ class NosoiSimulation:
     def n_recoveries(self) -> int:
         """Number of recovered individuals at the end of simulation."""
         return (self.df["fate"] == 2).sum()
+
+    def _invalidate_caches(self) -> None:
+        """Invalidate cache when changing df or graph representation."""
+        for attr in (
+            "simtime", "n_hosts", "n_active", "n_deaths", "n_recoveries"
+        ):
+            self.__dict__.pop(attr, None)
 
     @classmethod
     def from_parquet(cls, parquet_path: Path) -> "NosoiSimulation":
