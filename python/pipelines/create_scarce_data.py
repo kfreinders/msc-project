@@ -67,7 +67,7 @@ def apply_single_level(
             logger.debug(f"Stats computed for seed {seed:010}")
 
             if not stats_df.empty:
-                stats_df.insert(0, "SEED", seed)
+                stats_df.insert(0, "seed", seed)
                 stats_df.to_csv(output_path, mode='a', header=first_write, index=False)
                 first_write = False  # Only write header on first iteration
             else:

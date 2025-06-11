@@ -195,7 +195,7 @@ class NosoiDataProcessor:
         # Ensure both mean_nContact and p_trans are present
         if {"PAR_mean_nContact", "PAR_p_trans"} - set(self.df.columns):
             raise ValueError(
-                "Both 'PAR_mean_nContact' and 'PAR_p_trans' must be in the"
+                "Both 'PAR_mean_nContact' and 'PAR_p_trans' must be in the "
                 "dataset."
             )
 
