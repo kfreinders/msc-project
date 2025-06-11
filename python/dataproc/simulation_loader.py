@@ -19,10 +19,32 @@ class NosoiSimulation:
     - simulation metadata (from Parquet file schema)
     - a lazily constructed NetworkX directed graph representation of the chain
     """
-    df: pd.DataFrame
+    _df: pd.DataFrame
+    _graph: Optional[nx.DiGraph] = field(default=None, init=False, repr=False)
     metadata: dict[str, float]
     seed: int
-    _graph: Optional[nx.DiGraph] = field(default=None, init=False, repr=False)
+
+    @property
+    def df(self) -> pd.DataFrame:
+        return self._df
+
+    @df.setter
+    def df(self, new_df: pd.DataFrame):
+        print("entered df.setter!")
+        self._df = new_df
+        self._graph = self._df_to_graph()
+
+    @property
+    def graph(self) -> nx.DiGraph:
+        if self._graph is None:
+            self._graph = self._df_to_graph()
+        return self._graph
+
+    @graph.setter
+    def graph(self, new_graph: nx.DiGraph):
+        print("entered graph.setter!")
+        self._graph = new_graph
+        self._df = self._graph_to_df(new_graph)
 
     @cached_property
     def simtime(self) -> float:
@@ -50,7 +72,7 @@ class NosoiSimulation:
         return (self.df["fate"] == 2).sum()
 
     @classmethod
-    def from_parquet(cls, parquet_path: str) -> "NosoiSimulation":
+    def from_parquet(cls, parquet_path: Path) -> "NosoiSimulation":
         """
         Load a nosoi simulation from a Parquet file.
 
@@ -78,7 +100,7 @@ class NosoiSimulation:
 
         seed = extract_seed(Path(parquet_path))
 
-        return cls(df=df, metadata=metadata, seed=seed)
+        return cls(_df=df, metadata=metadata, seed=seed)
 
     @staticmethod
     def _reconstruct_hosts_ID(df: pd.DataFrame) -> pd.DataFrame:
@@ -124,24 +146,7 @@ class NosoiSimulation:
 
         return df
 
-    def as_graph(self) -> nx.DiGraph:
-        """
-        Lazily convert the transmission DataFrame to a directed NetworkX graph.
-
-        This graph represents the infection tree: each node is a host, and
-        directed edges point from infector to infectee. The graph is cached
-        after first construction.
-
-        Returns
-        -------
-        nx.DiGraph
-            Directed graph of the transmission chain.
-        """
-        if self._graph is None:
-            self._graph = self.df_to_nx_graph()
-        return self._graph
-
-    def df_to_nx_graph(self) -> nx.DiGraph:
+    def _df_to_graph(self) -> nx.DiGraph:
         """
         Convert the transmission chain to a directed NetworkX graph.
 
@@ -164,3 +169,16 @@ class NosoiSimulation:
                 graph.add_edge(int(row["inf.by"]), node_id)
 
         return graph
+
+    def _graph_to_df(self, graph: nx.DiGraph) -> pd.DataFrame:
+        data = []
+        for node_id, attr in graph.nodes(data=True):
+            row = dict(attr)
+            row["hosts.ID"] = node_id
+            inf_by = next((src for src, tgt in graph.in_edges(node_id)), np.nan)
+            row["inf.by"] = inf_by
+            data.append(row)
+
+        df = pd.DataFrame(data)
+        df = df.sort_values("hosts.ID").reset_index(drop=True)
+        return df
