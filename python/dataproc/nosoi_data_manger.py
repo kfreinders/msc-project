@@ -483,7 +483,8 @@ class NosoiDataProcessor:
         master_csv: Path = Path("data/nosoi/master.csv"),
         ptrain: float = 0.7,
         pval: float = 0.15,
-        seed: Optional[int] = 42
+        seed: Optional[int] = 42,
+        overwrite: bool = False
     ) -> Path:
         """
         Prepare three-way split for a given scarcity-level dataset.
@@ -500,21 +501,19 @@ class NosoiDataProcessor:
         scarce_csv : Path
             Path to the summary statistics CSV for a specific scarcity level
             (e.g., 'data/scarce_stats/scarce_0.25.csv').
-
         master_csv : Path, optional
             Path to the master file containing original simulation parameters
             (default is 'data/nosoi/master.csv').
-
         ptrain : float, optional
             Proportion of data to allocate to the training set (default is
             0.7).
-
         pval : float, optional
             Proportion of data to allocate to the validation set (default is
             0.15).
-
         seed : int | None, optional
             Random seed for reproducible splitting (default is 42).
+        overwrite : bool, optional
+            If False and split files exist, load them instead of recomputing.
 
         Returns
         -------
@@ -531,6 +530,6 @@ class NosoiDataProcessor:
             ptrain=ptrain,
             pval=pval,
             seed=seed,
-            overwrite=True,
+            overwrite=overwrite,
         )
         return split_dir
