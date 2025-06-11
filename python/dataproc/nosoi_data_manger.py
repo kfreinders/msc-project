@@ -82,8 +82,8 @@ class NosoiDataProcessor:
         Load and inner-join summary statistics and parameter files on 'seed'.
 
         This function populates self.df with the joined dataset, containing
-        both summary statistics (e.g., SS_*) and simulation parameters from
-        nosoi.
+        both summary statistics (e.g., SST_*) and simulation parameters from
+        nosoi prefixed with 'PAR_'.
         """
         # Load summary statistics and parameters
         summary_df = pd.read_csv(self.summary_stats_csv)
@@ -96,6 +96,11 @@ class NosoiDataProcessor:
             )
         if "seed" not in master_df.columns:
             raise ValueError(f"'seed' column missing in {self.master_csv}")
+
+        # Prefix all columns from master_df except seed
+        master_df = master_df.rename(columns={
+            col: f"PAR_{col}" for col in master_df.columns if col != "seed"
+        })
 
         merged_df = pd.merge(summary_df, master_df, on="seed", how="inner")
 
@@ -214,7 +219,7 @@ class NosoiDataProcessor:
             "PAR_stdv_t_incub",
             "PAR_infectivity",
             "PAR_p_fatal",
-            "PAR_t_recovery"
+            "PAR_mean_t_recovery"
         ]
 
         # Include columns not specified in `order`
