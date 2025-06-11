@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.figure
 import numpy as np
+import os
 import torch
 from typing import Optional
 import logging
@@ -288,3 +289,39 @@ def plot_predictions(
         cbar.set_label(color_label)
 
     return fig
+
+
+def save_torch_with_versioning(
+    model: torch.nn.Module,
+    path: str,
+    logger: logging.Logger
+) -> None:
+    """
+    Save a PyTorch model to `path`, renaming any existing file by appending a
+    version number.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The PyTorch model to save.
+    path : str
+        The full path to save the model to (e.g., '../data/dnn/regressor.pt').
+    logger : logging.Logger
+        A configured logger to report actions.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    # If the file exists, move it to a versioned filename
+    if os.path.exists(path):
+        base, ext = os.path.splitext(path)
+        i = 1
+        while True:
+            backup_path = f"{base}-{i}{ext}"
+            if not os.path.exists(backup_path):
+                os.rename(path, backup_path)
+                logger.info(f"Existing model renamed to '{backup_path}'.")
+                break
+            i += 1
+
+    torch.save(model.state_dict(), path)
+    logger.info(f"Model saved to '{path}'.")

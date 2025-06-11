@@ -25,6 +25,7 @@ import logging
 from utils.logging_config import setup_logging
 from models.model import NeuralNetwork
 import os
+from pathlib import Path
 import torch
 from torch import nn, optim
 from utils.utils import (
@@ -32,49 +33,9 @@ from utils.utils import (
     train_model,
     predict_nosoi_parameters,
     plot_predictions,
+    save_torch_with_versioning
 )
-from dataproc.nosoi_data_manger import prepare_nosoi_data
-
-
-# ------------------------------------------------------------------------------
-# Main function
-# ------------------------------------------------------------------------------
-
-
-def save_with_versioning(
-    model: torch.nn.Module,
-    path: str,
-    logger: logging.Logger
-) -> None:
-    """
-    Save a PyTorch model to `path`, renaming any existing file by appending a
-    version number.
-
-    Parameters
-    ----------
-    model : torch.nn.Module
-        The PyTorch model to save.
-    path : str
-        The full path to save the model to (e.g., '../data/dnn/regressor.pt').
-    logger : logging.Logger
-        A configured logger to report actions.
-    """
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-
-    # If the file exists, move it to a versioned filename
-    if os.path.exists(path):
-        base, ext = os.path.splitext(path)
-        i = 1
-        while True:
-            backup_path = f"{base}-{i}{ext}"
-            if not os.path.exists(backup_path):
-                os.rename(path, backup_path)
-                logger.info(f"Existing model renamed to '{backup_path}'.")
-                break
-            i += 1
-
-    torch.save(model.state_dict(), path)
-    logger.info(f"Model saved to '{path}'.")
+from dataproc.nosoi_data_manger import NosoiDataProcessor
 
 
 def main() -> None:
@@ -83,10 +44,10 @@ def main() -> None:
     logger = logging.getLogger(__name__)
 
     # Preprocess split datasets
-    train_tensor, val_tensor, test_tensor = prepare_nosoi_data(
-        summary_stats_csv="../data/nosoi/summary_stats_export.csv",
-        master_csv="../data/nosoi/master.csv",
-        output_dir="../data/splits",
+    train_tensor, val_tensor, test_tensor = NosoiDataProcessor.prepare_nosoi_data(
+        summary_stats_csv=Path("data/nosoi/summary_stats_export.csv"),
+        master_csv=Path("data/nosoi/master.csv"),
+        output_dir=Path("data/splits"),
         overwrite=False
     )
 
@@ -132,7 +93,9 @@ def main() -> None:
     )
 
     # Save the trained model
-    save_with_versioning(trained_model, "../data/dnn/regressor.pt", logger)
+    save_torch_with_versioning(
+        trained_model, "../data/dnn/regressor.pt", logger
+    )
 
     os.makedirs("../data/dnn", exist_ok=True)
     torch.save(model.state_dict(), "../data/dnn/regressor.pt")
