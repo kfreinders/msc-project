@@ -1,8 +1,8 @@
 from dataclasses import asdict, dataclass
-import itertools
+from itertools import product
 import json
 import logging
-from typing import Dict
+from typing import Dict, Iterable, Sequence
 
 import torch
 from torch import nn, optim
@@ -37,7 +37,9 @@ class HyperParams:
         return asdict(self)
 
 
-def generate_paramsets(params: dict[str, list[float]]) -> list[dict]:
+def all_param_combinations(
+    space: Dict[str, Sequence[float | int]]
+) -> Iterable[HyperParams]:
     """
     Generate all combinations of hyperparameter settings.
 
@@ -47,19 +49,18 @@ def generate_paramsets(params: dict[str, list[float]]) -> list[dict]:
 
     Parameters
     ----------
-    params : dict[str, list[float]]
+    params : Dict[str, Sequence[float | int]]
         Dictionary where keys are hyperparameter names and values are
         lists of possible values to try.
 
     Returns
     -------
-    list[dict]
-        List of dictionaries, each containing one combination of
-        hyperparameters.
+    HyperParams
+        Immutable, hashable bundle of hyperparameters.
     """
-    keys, values = zip(*params.items())
-    combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
-    return combinations
+    keys, values = zip(*space.items())
+    for combo in product(*values):
+        yield HyperParams(**dict(zip(keys, combo)))
 
 
 # FIXME: use the exact same data split in each tuning iteration, as otherwise
@@ -201,7 +202,7 @@ def main() -> None:
     }
 
     # Generate all possible combinations for a full grid search
-    hyperparameter_combinations = generate_paramsets(search_space)
+    hyperparameter_combinations = all_param_combinations(search_space)
     logger.info(
         f"Total configurations to try: {len(hyperparameter_combinations)}"
     )
