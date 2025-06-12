@@ -57,7 +57,7 @@ def apply_single_level(
             host_count = peek_host_count(file)
             if host_count < min_hosts:
                 logger.info(
-                    f"Skipping seed {file.name} ({host_count} < {min_hosts})."
+                    f"Skipping {file.name} ({host_count} < {min_hosts})."
                 )
                 continue
 
@@ -111,18 +111,17 @@ def apply_all_levels(path: Path, levels: np.ndarray, output_dir: Path) -> None:
 
 
 def main() -> None:
-    setup_logging("training")
     logger = get_logger()
-    setup_logging(run_name="scarcity_pipeline")
-    logger.info("Starting main pipeline")
+    setup_logging(run_name="create_scarce_sst")
 
+    logger.info("Starting main pipeline")
     input_path = Path("data/nosoi")
     output_path = Path("data/scarce_stats")
     levels = np.linspace(0.05, 0.5, num=10)
 
-    logger.info(f"Input path: {input_path}")
+    logger.info(f"Input path to Parquet files: {input_path}")
     logger.info(f"Output path: {output_path}")
-    logger.info(f"Levels: {levels}")
+    logger.info(f"Scarcity levels: {levels}")
 
     apply_all_levels(input_path, levels, output_path)
     logger.info("Main pipeline completed")
