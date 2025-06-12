@@ -4,6 +4,7 @@ import json
 import logging
 from typing import Dict, Iterable, Sequence
 
+import numpy as np
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
@@ -35,6 +36,30 @@ class HyperParams:
 
     def as_dict(self) -> Dict[str, float | int]:
         return asdict(self)
+
+
+def set_seed(seed: int = 42) -> None:
+    """
+    Make all libraries deterministic.
+
+    Set a seed for numpy and torch libraries to make results reproducable.
+
+    Parameters
+    ----------
+    seed : int
+        Seed to use. Default is 42.
+    """
+    # Set seeds
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # Make cuDNN only use deterministic convolution algorithms
+    torch.backends.cudnn.deterministic = True
+
+    # Disables cuDNN to automatically benchmark multiple convolution algorithms
+    # and select the fastest one.
+    torch.backends.cudnn.benchmark = False
 
 
 def all_param_combinations(
