@@ -1,22 +1,34 @@
-from typing import Protocol
+from typing import Protocol, runtime_checkable, Mapping, Any, Iterator, Dict
 import torch
 
 
+@runtime_checkable
 class TrainableModel(Protocol):
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: Any) -> torch.Tensor:
         ...
 
-    def parameters(self):
+    def __call__(self, x: Any) -> torch.Tensor:
         ...
 
-    def train(self, mode: bool = True):
+    def parameters(self) -> Iterator[torch.nn.Parameter]:
         ...
 
-    def eval(self):
+    def train(self, mode: bool = True) -> torch.nn.Module:
         ...
 
-    def state_dict(self):
+    def eval(self) -> torch.nn.Module:
         ...
 
-    def load_state_dict(self, state_dict):
+    def state_dict(self, *args, **kwargs) -> Dict[str, Any]:
+        ...
+
+    def load_state_dict(
+        self,
+        state_dict: Mapping[str, Any],
+        strict: bool = True,
+        assign: bool = False
+    ) -> Any:
+        ...
+
+    def to(self, device: torch.device) -> torch.nn.Module:
         ...

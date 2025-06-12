@@ -10,8 +10,8 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 from utils.logging_config import setup_logging
-from model import NeuralNetwork
-from utils.utils import train_model, load_data, split_data
+from models.model import NeuralNetwork
+from models.interfaces import TrainableModel
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,7 +119,12 @@ def build_dataloaders(
     return train, val
 
 
-def build_model(config: dict, device: torch.device) -> torch.nn.Module:
+def model_factory(
+    input_dim: int,
+    output_dim: int,
+    cfg: HyperParams,
+    device: torch.device
+) -> TrainableModel:
     """
     Build a neural network model based on a given hyperparameter configuration.
 
@@ -128,29 +133,23 @@ def build_model(config: dict, device: torch.device) -> torch.nn.Module:
 
     Parameters
     ----------
-    config : dict
-        Dictionary containing the model hyperparameters. Must include:
-        - 'hidden_size' (int): Number of neurons in each hidden layer.
-        - 'num_layers' (int): Total number of layers including the first hidden
-        layer.
-        - 'dropout_rate' (float): Dropout probability applied after each hidden
-        layer.
+    config : HyperParams
+        HyperParams class containing the model hyperparameters.
     device : torch.device
         The device (CPU or CUDA) on which to place the model.
 
     Returns
     -------
-    torch.nn.Module
+    TrainableModel
         The constructed neural network model.
     """
-    model = NeuralNetwork(
-        input_dim=26,
-        output_dim=6,
-        hidden_size=config["hidden_size"],
-        num_hidden_layers=config["num_layers"],
-        dropout_rate=config["dropout_rate"],
-    )
-    return model.to(device)
+    return NeuralNetwork(
+        input_dim=input_dim,
+        output_dim=output_dim,
+        hidden_size=cfg.hidden_size,
+        num_hidden_layers=cfg.num_layers,
+        dropout_rate=cfg.dropout_rate,
+    ).to(device)
 
 
 def train_and_evaluate(
@@ -273,7 +272,7 @@ def main() -> None:
         train, val = build_dataloaders(dataset, config["batch_size"])
 
         # Build model dynamically
-        model = build_model(config, device)
+        model = model_factory(config, device)
 
         # Train and pick best val loss during training
         final_val_loss = train_and_evaluate(
