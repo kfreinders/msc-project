@@ -1,4 +1,4 @@
-from typing import Protocol, Tuple
+from typing import Tuple
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
@@ -6,29 +6,11 @@ from torch.nn.modules.loss import _Loss
 import logging
 from utils.logging_config import setup_logging
 
+from .interfaces import TrainableModel
+
 
 def get_logger():
     return logging.getLogger(__name__)
-
-
-class TrainableModel(Protocol):
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        ...
-
-    def parameters(self):
-        ...
-
-    def train(self, mode: bool = True):
-        ...
-
-    def eval(self):
-        ...
-
-    def state_dict(self):
-        ...
-
-    def load_state_dict(self, state_dict):
-        ...
 
 
 # TODO: implement patience tuning: optimize tradeoff between loss gain and
