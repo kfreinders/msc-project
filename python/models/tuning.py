@@ -1,6 +1,8 @@
+from dataclasses import asdict, dataclass
 import itertools
 import json
 import logging
+from typing import Dict
 
 import torch
 from torch import nn, optim
@@ -9,6 +11,30 @@ from torch.utils.data import DataLoader
 from utils.logging_config import setup_logging
 from model import NeuralNetwork
 from utils.utils import train_model, load_data, split_data
+
+
+@dataclass(frozen=True, slots=True)
+class HyperParams:
+    """Immutable, hashable bundle of hyper-parameters."""
+
+    learning_rate: float
+    hidden_size: int
+    num_layers: int
+    dropout_rate: float
+    batch_size: int
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, float | int]) -> "HyperParams":
+        return cls(
+            learning_rate=float(d["learning_rate"]),
+            hidden_size=int(d["hidden_size"]),
+            num_layers=int(d["num_layers"]),
+            dropout_rate=float(d["dropout_rate"]),
+            batch_size=int(d["batch_size"]),
+        )
+
+    def as_dict(self) -> Dict[str, float | int]:
+        return asdict(self)
 
 
 def generate_paramsets(params: dict[str, list[float]]) -> list[dict]:
