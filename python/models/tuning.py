@@ -2,12 +2,11 @@ from dataclasses import asdict, dataclass
 from itertools import product
 import json
 import logging
-from typing import Callable, Dict, Iterable, Optional, Sequence
+from typing import Callable, Dict, Iterable, Sequence
 
 import numpy as np
 import torch
 from torch import nn, optim
-from torch.utils.data import DataLoader
 
 from utils.logging_config import setup_logging
 from models.model import NeuralNetwork
@@ -90,37 +89,6 @@ def all_param_combinations(
         yield HyperParams(**dict(zip(keys, combo)))
 
 
-# FIXME: use the exact same data split in each tuning iteration, as otherwise
-# model performance may vary depending on which data it gets in each iteration
-# FIXME: use the same training and validation splits as is used for training
-# the model, since
-def build_dataloaders(
-        dataset: torch.utils.data.TensorDataset, batch_size: int
-) -> tuple[DataLoader, DataLoader]:
-    """
-    Split the dataset and create training and validation DataLoaders.
-
-    This function splits the provided dataset into training and validation
-    sets, and returns corresponding DataLoaders with the specified batch size.
-
-    Parameters
-    ----------
-    dataset : torch.utils.data.TensorDataset
-        The complete dataset to split into training and validation sets.
-    batch_size : int
-        The number of samples per batch to load.
-
-    Returns
-    -------
-    tuple[DataLoader, DataLoader]
-        Training and validation DataLoaders.
-    """
-    train, val, _ = split_data(
-        dataset, ptrain=0.7, pval=0.3, batch_size=batch_size
-    )
-    return train, val
-
-
 def model_factory(
     input_dim: int,
     output_dim: int,
@@ -152,57 +120,6 @@ def model_factory(
         num_hidden_layers=cfg.num_layers,
         dropout_rate=cfg.dropout_rate,
     ).to(device)
-
-
-def train_and_evaluate(
-    model: torch.nn.Module,
-    config: dict,
-    train_loader: DataLoader,
-    val_loader: DataLoader,
-    device: torch.device
-) -> float:
-    """
-    Train the model and return the best validation loss achieved.
-
-    This function trains a given model using the training DataLoader,
-    monitors the validation loss during training, and returns the
-    minimum validation loss achieved across epochs.
-
-    Parameters
-    ----------
-    model : torch.nn.Module
-        The neural network model to train.
-    config : dict
-        Dictionary containing hyperparameters. Must include learning rate:
-        - 'learning_rate' (float): Learning rate for the optimizer.
-    train_loader : DataLoader
-        DataLoader for the training set.
-    val_loader : DataLoader
-        DataLoader for the validation set.
-    device : torch.device
-        The device (CPU or CUDA) used for training.
-
-    Returns
-    -------
-    float
-        The best (lowest) validation loss achieved during training.
-    """
-    optimizer = optim.Adam(model.parameters(), lr=config["learning_rate"])
-    criterion = nn.MSELoss()
-
-    _, history = train_model(
-        model,
-        train_loader,
-        val_loader,
-        criterion,
-        optimizer,
-        device,
-        epochs=100,
-        patience=5,
-    )
-
-    final_val_loss = min(history["avg_val_loss"])
-    return final_val_loss
 
 
 def train_single_config(
