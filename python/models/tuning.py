@@ -2,7 +2,7 @@ from dataclasses import asdict, dataclass
 from itertools import product
 import json
 import logging
-from typing import Dict, Iterable, Sequence
+from typing import Callable, Dict, Iterable, Optional, Sequence
 
 import numpy as np
 import torch
@@ -12,6 +12,8 @@ from torch.utils.data import DataLoader
 from utils.logging_config import setup_logging
 from models.model import NeuralNetwork
 from models.interfaces import TrainableModel
+from models.training import train
+from dataproc.nosoi_split import NosoiSplit
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,6 +203,64 @@ def train_and_evaluate(
 
     final_val_loss = min(history["avg_val_loss"])
     return final_val_loss
+
+
+def train_single_config(
+    cfg: HyperParams,
+    model_factory: Callable[
+        [int, int, HyperParams, torch.device], TrainableModel
+    ],
+    train_split: NosoiSplit,
+    val_split: NosoiSplit,
+    device: torch.device,
+    max_epochs: int = 100,
+    patience: int = 5,
+) -> float:
+    """
+    Train a model with a single hyperparameter configuration.
+
+    Parameters
+    ----------
+    cfg : HyperParams
+        The set of hyperparameters (learning rate, number of layers, etc.)
+        used to configure the model.
+    model_factory : Callable[[int, int, HyperParams, torch.device], TrainableModel]
+        A function that constructs the model given the input/output dimensions,
+        a hyperparameter configuration, and the target device.
+    train_split : NosoiSplit
+        The training dataset and associated metadata.
+    val_split : NosoiSplit
+        The validation dataset and associated metadata.
+    device : torch.device
+        Device on which the model is trained (CPU or CUDA).
+    max_epochs : int, optional
+        Maximum number of training epochs (default is 100).
+    patience : int, optional
+        Number of epochs with no improvement after which training is stopped
+        early (default is 5).
+
+    Returns
+    -------
+    float
+        The lowest validation loss observed after training.
+    """
+    # Get input and output dimensions
+    input_dim = train_split.input_dim
+    output_dim = train_split.output_dim
+
+    model = model_factory(input_dim, output_dim, cfg, device)
+    optimiser = optim.Adam(model.parameters(), lr=cfg.learning_rate)
+    criterion = nn.MSELoss()
+
+    batch_size = cfg.batch_size
+    train_loader = train_split.make_dataloader(batch_size)
+    val_loader = val_split.make_dataloader(batch_size)
+
+    model, hist = train(
+        model, train_loader, val_loader, criterion, optimiser, device,
+        epochs=max_epochs, patience=patience
+    )
+    return float(min(hist["val_loss"]))
 
 
 def main() -> None:
