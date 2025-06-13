@@ -5,6 +5,7 @@ import logging
 from typing import Callable, Dict, Iterable, Sequence
 
 import numpy as np
+from pathlib import Path
 import torch
 from torch import nn, optim
 
@@ -209,6 +210,26 @@ def train_single_config(
         epochs=max_epochs, patience=patience
     )
     return float(min(hist["val_loss"]))
+
+
+def backup_json(path: Path) -> None:
+    """
+    Naïve versioning: rename *path* → *stem-1.json*, *stem-2.json*, ...
+
+    Parameters
+    ----------
+    path
+        Path to write the json file to.
+    """
+    if not path.exists():
+        return
+    i = 1
+    while True:
+        candidate = path.with_stem(f"{path.stem}-{i}")
+        if not candidate.exists():
+            path.rename(candidate)
+            break
+        i += 1
 
 
 def main() -> None:
