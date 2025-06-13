@@ -9,9 +9,9 @@ import torch
 from torch import nn, optim
 
 from utils.logging_config import setup_logging
-from models.model import NeuralNetwork
-from models.interfaces import TrainableModel
-from models.training import train
+from .model import NeuralNetwork
+from .interfaces import TrainableModel
+from .training import train
 from dataproc.nosoi_split import NosoiSplit
 
 
@@ -27,6 +27,26 @@ class HyperParams:
 
     @classmethod
     def from_dict(cls, d: Dict[str, float | int]) -> "HyperParams":
+        """
+        Construct a `HyperParams` instance from a dictionary.
+
+        This class method parses a dictionary containing hyperparameter
+        values and returns a `HyperParams` object with properly cast types.
+
+        Parameters
+        ----------
+        cls : type
+            The `HyperParams` class itself.
+        d : Dict[str, float | int]
+            A dictionary containing keys for each hyperparameter
+            (e.g., "learning_rate", "hidden_size", etc.).
+
+        Returns
+        -------
+        HyperParams
+            A new `HyperParams` instance initialized with values from the
+            dictionary.
+        """
         return cls(
             learning_rate=float(d["learning_rate"]),
             hidden_size=int(d["hidden_size"]),
@@ -36,6 +56,17 @@ class HyperParams:
         )
 
     def as_dict(self) -> Dict[str, float | int]:
+        """
+        Convert the `HyperParams` instance to a dictionary.
+
+        This method returns the internal fields of the `HyperParams` object
+        as a plain dictionary for logging or serialization.
+
+        Returns
+        -------
+        Dict[str, float | int]
+            A dictionary representation of the hyperparameter bundle.
+        """
         return asdict(self)
 
 
