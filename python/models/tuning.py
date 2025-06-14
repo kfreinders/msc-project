@@ -3,7 +3,6 @@ from itertools import product
 import json
 import logging
 from random import sample
-from re import search
 from typing import Callable, Dict, Iterable, Sequence
 
 import numpy as np
@@ -97,7 +96,7 @@ def set_seed(seed: int = 42) -> None:
     torch.backends.cudnn.benchmark = False
 
 
-def full_grid(
+def full_grid_search(
     space: Dict[str, Sequence[float | int]]
 ) -> Iterable[HyperParams]:
     """
@@ -141,7 +140,7 @@ def random_search(
     HyperParams
         Immutable, hashable bundle of hyperparameters.
     """
-    subset = sample(list(full_grid(search_space)), k=k)
+    subset = sample(list(full_grid_search(search_space)), k=k)
     for config in subset:
         yield config
 
@@ -264,6 +263,7 @@ def tune_model(
         [int, int, HyperParams, torch.device], TrainableModel
     ],
     search_space: Dict[str, Sequence[float | int]],
+    search_method: Callable[[Dict[str, Sequence[float | int]]], Iterable[HyperParams]],
     device: torch.device,
     output_path: Path,
     max_epochs: int = 100,
@@ -284,6 +284,9 @@ def tune_model(
         hyperparams, and device.
     search_space : Dict[str, Sequence[float | int]]
         Hyperparameter search space.
+    search_method : Callable[[Dict[str, Sequence[float | int]]], Iterable[HyperParams]]
+        Which search method to explore the hyperparameter space. Can be
+        full_grid_search or random_search.
     device : torch.device
         Training device (CPU or CUDA).
     output_path : Path
@@ -309,7 +312,8 @@ def tune_model(
     best_loss = float("inf")
     best_config = None
 
-    combinations = list(full_grid(search_space))
+    logger.info(f"Using search method: {search_method.__name__}")
+    combinations = list(search_method(search_space))
     logger.info(f"Testing {len(combinations)} hyperparameter combinations.")
 
     # Loop over and test all hyperparameter combinations
@@ -374,9 +378,9 @@ def main() -> None:
 
     # Load data splits from disk
     splits_path = Path("data/splits/scarce_0.05")
+    logger.info(f"Loading saved data splits from {splits_path}")
     train_split = NosoiSplit.load("train", splits_path)
     val_split = NosoiSplit.load("val", splits_path)
-    logger.info(f"Loaded saved data splits from {splits_path}")
 
     output_path = Path("data/tuning")
     logger.info(f"Saving tuning results to: {output_path}")
@@ -387,6 +391,7 @@ def main() -> None:
         val_split,
         model_factory,
         search_space,
+        random_search,
         device,
         output_path
     )
