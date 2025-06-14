@@ -2,6 +2,8 @@ from dataclasses import asdict, dataclass
 from itertools import product
 import json
 import logging
+from random import sample
+from re import search
 from typing import Callable, Dict, Iterable, Sequence
 
 import numpy as np
@@ -95,7 +97,7 @@ def set_seed(seed: int = 42) -> None:
     torch.backends.cudnn.benchmark = False
 
 
-def all_param_combinations(
+def full_grid(
     space: Dict[str, Sequence[float | int]]
 ) -> Iterable[HyperParams]:
     """
@@ -119,6 +121,29 @@ def all_param_combinations(
     keys, values = zip(*space.items())
     for combo in product(*values):
         yield HyperParams(**dict(zip(keys, combo)))
+
+
+def random_search(
+    search_space: Dict[str, Sequence[float | int]],
+    k=150
+) -> Iterable[HyperParams]:
+    """
+    Randomly sample k combinations from the hyperparameter search space.
+
+    Parameters
+    ----------
+    params : Dict[str, Sequence[float | int]]
+        Dictionary where keys are hyperparameter names and values are
+        lists of possible values to try.
+
+    Returns
+    -------
+    HyperParams
+        Immutable, hashable bundle of hyperparameters.
+    """
+    subset = sample(list(full_grid(search_space)), k=k)
+    for config in subset:
+        yield config
 
 
 def model_factory(
@@ -284,7 +309,7 @@ def tune_model(
     best_loss = float("inf")
     best_config = None
 
-    combinations = list(all_param_combinations(search_space))
+    combinations = list(full_grid(search_space))
     logger.info(f"Testing {len(combinations)} hyperparameter combinations.")
 
     # Loop over and test all hyperparameter combinations
@@ -321,3 +346,51 @@ def tune_model(
 
     logger.info(f"Best config: {best_config} (loss: {best_loss:.4f})")
     return best_config, best_loss
+
+
+def main() -> None:
+    # Set up logger
+    setup_logging("tuning")
+    logger = logging.getLogger(__name__)
+
+    # Use CUDA if available
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"Using device: {device}")
+
+    # Set the seed
+    seed = 42
+    set_seed(seed)
+    logger.info(f"Set hyperparameter tuning seed to: {seed}")
+
+    # Define the hyperparameter search space
+    search_space: dict[str, Sequence[int | float]] = {
+        "learning_rate": [1e-2, 1e-3, 3e-4, 1e-4],
+        "hidden_size": [16, 32, 64, 128, 256],
+        "num_layers": [1, 2, 3, 4, 5],
+        "dropout_rate": [0.1, 0.2, 0.3],
+        "batch_size": [16, 32, 64, 128],
+    }
+    logger.info(f"Hyperparameter search space: {search_space}")
+
+    # Load data splits from disk
+    splits_path = Path("data/splits/scarce_0.05")
+    train_split = NosoiSplit.load("train", splits_path)
+    val_split = NosoiSplit.load("val", splits_path)
+    logger.info(f"Loaded saved data splits from {splits_path}")
+
+    output_path = Path("data/tuning")
+    logger.info(f"Saving tuning results to: {output_path}")
+
+    # Start tuning
+    tune_model(
+        train_split,
+        val_split,
+        model_factory,
+        search_space,
+        device,
+        output_path
+    )
+
+
+if __name__ == "__main__":
+    main()
