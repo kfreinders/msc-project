@@ -1,3 +1,4 @@
+import copy
 from typing import Tuple
 import torch
 from torch.utils.data import DataLoader
@@ -50,11 +51,12 @@ def train(
 
     Returns
     -------
-    torch.nn.Module
-        The trained model with the best weights loaded.
+    TrainableModel
+        The trained model with the best weights loaded (based on validation
+        loss).
     dict[str, list[float]]
-        A dictionary containing lists of average training and validation losses
-        across epochs. Keys are 'avg_train_loss' and 'avg_val_loss'.
+        Dictionary with training and validation loss curves per epoch.
+        Keys are 'train_loss' and 'val_loss'.
 
     Notes
     -----
@@ -72,8 +74,8 @@ def train(
 
     # Keep track of training history
     history: dict[str, list[float]] = {
-        "avg_train_loss": [],
-        "avg_val_loss": [],
+        "train_loss": [],
+        "val_loss": [],
     }
 
     for epoch in range(epochs):
@@ -87,33 +89,39 @@ def train(
             optimizer.step()
             total_loss += loss.item()
 
-        avg_train_loss = total_loss / len(train_loader)
+        train_loss = total_loss / len(train_loader)
 
         # Validation
         model.eval()
-        val_loss = 0
+        val_loss = 0.0
         with torch.no_grad():
             for X, y in val_loader:
                 X, y = X.to(device), y.to(device)
                 val_loss += criterion(model(X), y).item()
-        avg_val_loss = val_loss / len(val_loader)
+        val_loss = val_loss / len(val_loader)
+
+        if torch.isnan(torch.tensor(val_loss)):
+            logger.warning(
+                "NaN encountered in validation loss. Stopping early."
+            )
+            break
 
         # Log each epoch when debugging
         logger.debug(
             f"Epoch {epoch+1}: "
-            f"Train Loss = {avg_train_loss:.4f}, "
-            f"Val Loss = {avg_val_loss:.4f}"
+            f"Train Loss = {train_loss:.4f}, "
+            f"Val Loss = {val_loss:.4f}"
         )
 
         # Record history
-        history["avg_train_loss"].append(avg_train_loss)
-        history["avg_val_loss"].append(avg_val_loss)
+        history["train_loss"].append(train_loss)
+        history["val_loss"].append(val_loss)
 
         # Early stopping
-        if avg_val_loss < best_loss:
-            best_loss = avg_val_loss
+        if val_loss < best_loss:
+            best_loss = val_loss
             trigger = 0
-            best_model_state = model.state_dict()
+            best_model_state = copy.deepcopy(model.state_dict())
         else:
             trigger += 1
             if trigger >= patience:
