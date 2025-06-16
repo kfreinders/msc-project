@@ -1,17 +1,104 @@
-import itertools
+from dataclasses import asdict, dataclass
+from itertools import product
 import json
 import logging
+from random import sample
+from typing import Callable, Dict, Iterable, Sequence
 
+import numpy as np
+from pathlib import Path
 import torch
 from torch import nn, optim
-from torch.utils.data import DataLoader
 
 from utils.logging_config import setup_logging
-from model import NeuralNetwork
-from utils.utils import train_model, load_data, split_data
+from .model import NeuralNetwork
+from .interfaces import TrainableModel
+from .training import train
+from dataproc.nosoi_split import NosoiSplit
 
 
-def generate_paramsets(params: dict[str, list[float]]) -> list[dict]:
+@dataclass(frozen=True, slots=True)
+class HyperParams:
+    """Immutable, hashable bundle of hyper-parameters."""
+
+    learning_rate: float
+    hidden_size: int
+    num_layers: int
+    dropout_rate: float
+    batch_size: int
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, float | int]) -> "HyperParams":
+        """
+        Construct a `HyperParams` instance from a dictionary.
+
+        This class method parses a dictionary containing hyperparameter
+        values and returns a `HyperParams` object with properly cast types.
+
+        Parameters
+        ----------
+        cls : type
+            The `HyperParams` class itself.
+        d : Dict[str, float | int]
+            A dictionary containing keys for each hyperparameter
+            (e.g., "learning_rate", "hidden_size", etc.).
+
+        Returns
+        -------
+        HyperParams
+            A new `HyperParams` instance initialized with values from the
+            dictionary.
+        """
+        return cls(
+            learning_rate=float(d["learning_rate"]),
+            hidden_size=int(d["hidden_size"]),
+            num_layers=int(d["num_layers"]),
+            dropout_rate=float(d["dropout_rate"]),
+            batch_size=int(d["batch_size"]),
+        )
+
+    def as_dict(self) -> Dict[str, float | int]:
+        """
+        Convert the `HyperParams` instance to a dictionary.
+
+        This method returns the internal fields of the `HyperParams` object
+        as a plain dictionary for logging or serialization.
+
+        Returns
+        -------
+        Dict[str, float | int]
+            A dictionary representation of the hyperparameter bundle.
+        """
+        return asdict(self)
+
+
+def set_seed(seed: int = 42) -> None:
+    """
+    Make all libraries deterministic.
+
+    Set a seed for numpy and torch libraries to make results reproducable.
+
+    Parameters
+    ----------
+    seed : int
+        Seed to use. Default is 42.
+    """
+    # Set seeds
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # Make cuDNN only use deterministic convolution algorithms
+    torch.backends.cudnn.deterministic = True
+
+    # Disables cuDNN to automatically benchmark multiple convolution algorithms
+    # and select the fastest one.
+    torch.backends.cudnn.benchmark = False
+
+
+def full_grid_search(
+    space: Dict[str, Sequence[float | int]]
+) -> Iterable[HyperParams]:
     """
     Generate all combinations of hyperparameter settings.
 
@@ -21,53 +108,49 @@ def generate_paramsets(params: dict[str, list[float]]) -> list[dict]:
 
     Parameters
     ----------
-    params : dict[str, list[float]]
+    params : Dict[str, Sequence[float | int]]
         Dictionary where keys are hyperparameter names and values are
         lists of possible values to try.
 
     Returns
     -------
-    list[dict]
-        List of dictionaries, each containing one combination of
-        hyperparameters.
+    HyperParams
+        Immutable, hashable bundle of hyperparameters.
     """
-    keys, values = zip(*params.items())
-    combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
-    return combinations
+    keys, values = zip(*space.items())
+    for combo in product(*values):
+        yield HyperParams(**dict(zip(keys, combo)))
 
 
-# FIXME: use the exact same data split in each tuning iteration, as otherwise
-# model performance may vary depending on which data it gets in each iteration
-# FIXME: use the same training and validation splits as is used for training
-# the model, since
-def build_dataloaders(
-        dataset: torch.utils.data.TensorDataset, batch_size: int
-) -> tuple[DataLoader, DataLoader]:
+def random_search(
+    search_space: Dict[str, Sequence[float | int]],
+    k=150
+) -> Iterable[HyperParams]:
     """
-    Split the dataset and create training and validation DataLoaders.
-
-    This function splits the provided dataset into training and validation
-    sets, and returns corresponding DataLoaders with the specified batch size.
+    Randomly sample k combinations from the hyperparameter search space.
 
     Parameters
     ----------
-    dataset : torch.utils.data.TensorDataset
-        The complete dataset to split into training and validation sets.
-    batch_size : int
-        The number of samples per batch to load.
+    params : Dict[str, Sequence[float | int]]
+        Dictionary where keys are hyperparameter names and values are
+        lists of possible values to try.
 
     Returns
     -------
-    tuple[DataLoader, DataLoader]
-        Training and validation DataLoaders.
+    HyperParams
+        Immutable, hashable bundle of hyperparameters.
     """
-    train, val, _ = split_data(
-        dataset, ptrain=0.7, pval=0.3, batch_size=batch_size
-    )
-    return train, val
+    subset = sample(list(full_grid_search(search_space)), k=k)
+    for config in subset:
+        yield config
 
 
-def build_model(config: dict, device: torch.device) -> torch.nn.Module:
+def model_factory(
+    input_dim: int,
+    output_dim: int,
+    cfg: HyperParams,
+    device: torch.device
+) -> TrainableModel:
     """
     Build a neural network model based on a given hyperparameter configuration.
 
@@ -76,80 +159,197 @@ def build_model(config: dict, device: torch.device) -> torch.nn.Module:
 
     Parameters
     ----------
-    config : dict
-        Dictionary containing the model hyperparameters. Must include:
-        - 'hidden_size' (int): Number of neurons in each hidden layer.
-        - 'num_layers' (int): Total number of layers including the first hidden
-        layer.
-        - 'dropout_rate' (float): Dropout probability applied after each hidden
-        layer.
+    config : HyperParams
+        HyperParams class containing the model hyperparameters.
     device : torch.device
         The device (CPU or CUDA) on which to place the model.
 
     Returns
     -------
-    torch.nn.Module
+    TrainableModel
         The constructed neural network model.
     """
-    model = NeuralNetwork(
-        input_dim=26,
-        output_dim=6,
-        hidden_size=config["hidden_size"],
-        num_hidden_layers=config["num_layers"],
-        dropout_rate=config["dropout_rate"],
-    )
-    return model.to(device)
+    return NeuralNetwork(
+        input_dim=input_dim,
+        output_dim=output_dim,
+        hidden_size=cfg.hidden_size,
+        num_hidden_layers=cfg.num_layers,
+        dropout_rate=cfg.dropout_rate,
+    ).to(device)
 
 
-def train_and_evaluate(
-    model: torch.nn.Module,
-    config: dict,
-    train_loader: DataLoader,
-    val_loader: DataLoader,
-    device: torch.device
+def train_single_config(
+    cfg: HyperParams,
+    model_factory: Callable[
+        [int, int, HyperParams, torch.device], TrainableModel
+    ],
+    train_split: NosoiSplit,
+    val_split: NosoiSplit,
+    device: torch.device,
+    max_epochs: int = 100,
+    patience: int = 5,
 ) -> float:
     """
-    Train the model and return the best validation loss achieved.
-
-    This function trains a given model using the training DataLoader,
-    monitors the validation loss during training, and returns the
-    minimum validation loss achieved across epochs.
+    Train a model with a single hyperparameter configuration.
 
     Parameters
     ----------
-    model : torch.nn.Module
-        The neural network model to train.
-    config : dict
-        Dictionary containing hyperparameters. Must include learning rate:
-        - 'learning_rate' (float): Learning rate for the optimizer.
-    train_loader : DataLoader
-        DataLoader for the training set.
-    val_loader : DataLoader
-        DataLoader for the validation set.
+    cfg : HyperParams
+        The set of hyperparameters (learning rate, number of layers, etc.)
+        used to configure the model.
+    model_factory : Callable[[int, int, HyperParams, torch.device], TrainableModel]
+        A function that constructs the model given the input/output dimensions,
+        a hyperparameter configuration, and the target device.
+    train_split : NosoiSplit
+        The training dataset and associated metadata.
+    val_split : NosoiSplit
+        The validation dataset and associated metadata.
     device : torch.device
-        The device (CPU or CUDA) used for training.
+        Device on which the model is trained (CPU or CUDA).
+    max_epochs : int, optional
+        Maximum number of training epochs (default is 100).
+    patience : int, optional
+        Number of epochs with no improvement after which training is stopped
+        early (default is 5).
 
     Returns
     -------
     float
-        The best (lowest) validation loss achieved during training.
+        The lowest validation loss observed after training.
     """
-    optimizer = optim.Adam(model.parameters(), lr=config["learning_rate"])
+    # Get input and output dimensions
+    input_dim = train_split.input_dim
+    output_dim = train_split.output_dim
+
+    model = model_factory(input_dim, output_dim, cfg, device)
+    optimiser = optim.Adam(model.parameters(), lr=cfg.learning_rate)
     criterion = nn.MSELoss()
 
-    _, history = train_model(
-        model,
-        train_loader,
-        val_loader,
-        criterion,
-        optimizer,
-        device,
-        epochs=100,
-        patience=5,
-    )
+    batch_size = cfg.batch_size
+    train_loader = train_split.make_dataloader(batch_size)
+    val_loader = val_split.make_dataloader(batch_size)
 
-    final_val_loss = min(history["avg_val_loss"])
-    return final_val_loss
+    model, hist = train(
+        model, train_loader, val_loader, criterion, optimiser, device,
+        epochs=max_epochs, patience=patience
+    )
+    return float(min(hist["val_loss"]))
+
+
+def backup_json(path: Path) -> None:
+    """
+    Naïve versioning: rename *path* → *stem-1.json*, *stem-2.json*, ...
+
+    Parameters
+    ----------
+    path
+        Path to write the json file to.
+    """
+    if not path.exists():
+        return
+    i = 1
+    while True:
+        candidate = path.with_stem(f"{path.stem}-{i}")
+        if not candidate.exists():
+            path.rename(candidate)
+            break
+        i += 1
+
+
+def tune_model(
+    train_split: NosoiSplit,
+    val_split: NosoiSplit,
+    model_factory: Callable[
+        [int, int, HyperParams, torch.device], TrainableModel
+    ],
+    search_space: Dict[str, Sequence[float | int]],
+    search_method: Callable[[Dict[str, Sequence[float | int]]], Iterable[HyperParams]],
+    device: torch.device,
+    output_path: Path,
+    max_epochs: int = 100,
+    patience: int = 5,
+) -> tuple[HyperParams, float]:
+    """
+    Perform a full grid search over all hyperparameter combinations and return
+    the best one.
+
+    Parameters
+    ----------
+    train_split : NosoiSplit
+        Training data split.
+    val_split : NosoiSplit
+        Validation data split.
+    model_factory : Callable
+        Function that returns a model when given input/output dims,
+        hyperparams, and device.
+    search_space : Dict[str, Sequence[float | int]]
+        Hyperparameter search space.
+    search_method : Callable[[Dict[str, Sequence[float | int]]], Iterable[HyperParams]]
+        Which search method to explore the hyperparameter space. Can be
+        full_grid_search or random_search.
+    device : torch.device
+        Training device (CPU or CUDA).
+    output_path : Path
+        Path to save tuning results.
+    max_epochs : int, optional
+        Maximum number of epochs to train. Default is 100.
+    patience : int, optional
+        Early stopping patience. Default is 5.
+
+    Returns
+    -------
+    tuple[HyperParams, float]
+        Best-performing hyperparameter config and its validation loss.
+    """
+    setup_logging("tuning")
+    logger = logging.getLogger(__name__)
+    logger.info("Starting hyperparameter tuning...")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    backup_json(output_path)
+
+    results: list[tuple[Dict[str, float | int], float]] = []
+    best_loss = float("inf")
+    best_config = None
+
+    logger.info(f"Using search method: {search_method.__name__}")
+    combinations = list(search_method(search_space))
+    logger.info(f"Testing {len(combinations)} hyperparameter combinations.")
+
+    # Loop over and test all hyperparameter combinations
+    for i, cfg in enumerate(combinations, start=1):
+        logger.info(f"Training configuration {i}/{len(combinations)}: {cfg}")
+        val_loss = train_single_config(
+            cfg, model_factory, train_split, val_split,
+            device, max_epochs=max_epochs, patience=patience
+        )
+        logger.info(f"Validation loss: {val_loss:.4f}")
+
+        results.append((cfg.as_dict(), val_loss))
+
+        if val_loss < best_loss:
+            best_loss = val_loss
+            best_config = cfg
+
+        # Save checkpoint after each config
+        with open(output_path, "w") as f:
+            json.dump(
+                {
+                    "results": results,
+                    "best": best_config.as_dict() if best_config else None,
+                    "loss": best_loss
+                },
+                f,
+                indent=4
+            )
+
+    if best_config is None:
+        raise RuntimeError(
+            "No model configuration was successfully evaluated."
+        )
+
+    logger.info(f"Best config: {best_config} (loss: {best_loss:.4f})")
+    return best_config, best_loss
 
 
 def main() -> None:
@@ -161,98 +361,40 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
-    # Load data
-    logger.info("Loading dataset...")
-    dataset, *_ = load_data("data/nosoi/merged.csv")
+    # Set the seed
+    seed = 42
+    set_seed(seed)
+    logger.info(f"Set hyperparameter tuning seed to: {seed}")
 
-    # Define the hyperparameter and architecture search space
-    search_space: dict[str, list[float]] = {
+    # Define the hyperparameter search space
+    search_space: dict[str, Sequence[int | float]] = {
         "learning_rate": [1e-2, 1e-3, 3e-4, 1e-4],
         "hidden_size": [16, 32, 64, 128, 256],
         "num_layers": [1, 2, 3, 4, 5],
         "dropout_rate": [0.1, 0.2, 0.3],
         "batch_size": [16, 32, 64, 128],
     }
+    logger.info(f"Hyperparameter search space: {search_space}")
 
-    # Generate all possible combinations for a full grid search
-    hyperparameter_combinations = generate_paramsets(search_space)
-    logger.info(
-        f"Total configurations to try: {len(hyperparameter_combinations)}"
+    # Load data splits from disk
+    splits_path = Path("data/splits/scarce_0.05")
+    logger.info(f"Loading saved data splits from {splits_path}")
+    train_split = NosoiSplit.load("train", splits_path)
+    val_split = NosoiSplit.load("val", splits_path)
+
+    output_path = Path("data/tuning")
+    logger.info(f"Saving tuning results to: {output_path}")
+
+    # Start tuning
+    tune_model(
+        train_split,
+        val_split,
+        model_factory,
+        search_space,
+        random_search,
+        device,
+        output_path
     )
-
-    # TODO: more intelligent resuming logic
-
-    # Try to resume from existing results
-    results = []
-    try:
-        with open("data/dnn/tuning_results.json", "r") as f:
-            loaded = json.load(f)
-            results = loaded.get("results", [])
-            logger.info(
-                f"Loaded {len(results)} previously saved configurations."
-            )
-    except FileNotFoundError:
-        logger.info("No previous results found. Starting new tuning run.")
-
-    # Build set of already tried configurations
-    tried_configs = {json.dumps(r[0], sort_keys=True) for r in results}
-
-    # FIXME: if there are .json files from a previous run, the script should
-    # be aware that this is a new run. Currently, it might cause issues with
-    # resuming logic.
-
-    # Start full grid search
-    for idx, config in enumerate(hyperparameter_combinations, start=1):
-        # Skip this configuration if we've tried it before
-        config_serialized = json.dumps(config, sort_keys=True)
-        if config_serialized in tried_configs:
-            logger.info(
-                f"Skipping already tried configuration "
-                f"{idx}/{len(hyperparameter_combinations)}"
-            )
-            continue
-
-        logger.info(
-            f"Training configuration {idx}/{len(hyperparameter_combinations)}"
-        )
-        logger.info(f"Configuration details: {config}")
-
-        # Create dataloaders with specified batch size
-        train, val = build_dataloaders(dataset, config["batch_size"])
-
-        # Build model dynamically
-        model = build_model(config, device)
-
-        # Train and pick best val loss during training
-        final_val_loss = train_and_evaluate(
-            model, config, train, val, device
-        )
-
-        # Save the config and its performance
-        logger.info(
-            f"Final validation loss for current config: {final_val_loss:.4f}"
-        )
-        results.append((config, final_val_loss))
-
-        # Save a checkpoint after every configuration
-        with open("data/dnn/tuning_results.json", "w") as f:
-            json.dump({"results": results}, f, indent=4)
-
-    # Sort by lowest validation loss
-    results.sort(key=lambda x: x[1])
-    best_config, best_loss = results[0]
-
-    # Print best result
-    logger.info(
-        f"Best hyperparameters found: {best_config} "
-        f"with validation loss {best_loss}"
-    )
-
-    # Save results
-    with open("tuning_results.json", "w") as f:
-        json.dump(
-            {"best_config": best_config, "best_loss": best_loss}, f, indent=4
-        )
 
 
 if __name__ == "__main__":
