@@ -9,6 +9,8 @@ import torch
 from typing import Optional
 import logging
 
+from models.interfaces import TrainableModel
+
 # -----------------------------------------------------------------------------
 #  Configure logging
 # -----------------------------------------------------------------------------
@@ -219,9 +221,8 @@ def plot_scarce_distributions(csv_path: Path):
 
 
 def save_torch_with_versioning(
-    model: torch.nn.Module,
-    path: str,
-    logger: logging.Logger
+    model: TrainableModel,
+    path: Path,
 ) -> None:
     """
     Save a PyTorch model to `path`, renaming any existing file by appending a
@@ -236,6 +237,7 @@ def save_torch_with_versioning(
     logger : logging.Logger
         A configured logger to report actions.
     """
+    logger = logging.getLogger(__name__)
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
     # If the file exists, move it to a versioned filename
