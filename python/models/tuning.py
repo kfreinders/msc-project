@@ -1,3 +1,36 @@
+"""
+tuning.py
+---------
+
+This module provides a complete framework for hyperparameter tuning of DNN
+models trained on epidemiological summary statistics.
+
+Core functionality includes:
+- Definition of immutable `HyperParams` dataclass to manage model
+  configurations
+- Grid and random search methods to generate hyperparameter combinations
+- A factory interface (`model_factory`) to construct models from
+  hyperparameters
+- Utilities for deterministic behaviour
+- Functions to train models (`train_single_config`) and evaluate them
+- A `tune_model` routine that tracks and saves performance metrics and best
+  configurations
+
+The module is designed to work with models implementing the `TrainableModel`
+interface and data formatted as `NosoiSplit` objects. It supports both full
+grid and random search strategies, and outputs results in a versioned JSON
+format.
+
+Typical usage:
+>>> best_cfg, best_loss = tune_model(
+>>>     train_split, val_split, model_factory,
+>>>     search_space, random_search, device, output_path
+>>> )
+
+All training includes early stopping and performance tracking for each
+configuration.
+"""
+
 from dataclasses import asdict, dataclass
 from itertools import product
 import json
@@ -256,6 +289,7 @@ def backup_json(path: Path) -> None:
         i += 1
 
 
+# TODO: return best model also for ease of use.
 def tune_model(
     train_split: NosoiSplit,
     val_split: NosoiSplit,
@@ -350,52 +384,3 @@ def tune_model(
 
     logger.info(f"Best config: {best_config} (loss: {best_loss:.4f})")
     return best_config, best_loss
-
-
-def main() -> None:
-    # Set up logger
-    setup_logging("tuning")
-    logger = logging.getLogger(__name__)
-
-    # Use CUDA if available
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Using device: {device}")
-
-    # Set the seed
-    seed = 42
-    set_seed(seed)
-    logger.info(f"Set hyperparameter tuning seed to: {seed}")
-
-    # Define the hyperparameter search space
-    search_space: dict[str, Sequence[int | float]] = {
-        "learning_rate": [1e-2, 1e-3, 3e-4, 1e-4],
-        "hidden_size": [16, 32, 64, 128, 256],
-        "num_layers": [1, 2, 3, 4, 5],
-        "dropout_rate": [0.1, 0.2, 0.3],
-        "batch_size": [16, 32, 64, 128],
-    }
-    logger.info(f"Hyperparameter search space: {search_space}")
-
-    # Load data splits from disk
-    splits_path = Path("data/splits/scarce_0.05")
-    logger.info(f"Loading saved data splits from {splits_path}")
-    train_split = NosoiSplit.load("train", splits_path)
-    val_split = NosoiSplit.load("val", splits_path)
-
-    output_path = Path("data/tuning")
-    logger.info(f"Saving tuning results to: {output_path}")
-
-    # Start tuning
-    tune_model(
-        train_split,
-        val_split,
-        model_factory,
-        search_space,
-        random_search,
-        device,
-        output_path
-    )
-
-
-if __name__ == "__main__":
-    main()
