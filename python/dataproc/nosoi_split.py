@@ -1,3 +1,21 @@
+"""
+nosoi_split.py
+--------------
+
+This module defines the `NosoiSplit` class, which encapsulates aligned
+processed (torch.Tensor) and raw (NumPy array) data for a given data split
+(e.g., train, validation, test) in nosoi-based simulation studies.
+
+It supports:
+- Easy access to input/output dimensions for model initialization
+- Creation of PyTorch DataLoaders
+- Save/load functionality preserving both processed and raw feature mappings
+- Column-aware access to raw features for interpretability or analysis
+
+Typical usage involves preparing splits in a data processing pipeline and
+loading them for training and evaluation of neural network models.
+"""
+
 import os
 from dataclasses import dataclass
 from typing import Optional
@@ -10,6 +28,24 @@ from torch.utils.data import DataLoader, TensorDataset
 
 @dataclass
 class NosoiSplit:
+    """
+    A data container representing one split (train/val/test) of simulation
+    data.
+
+    This class holds both processed input/output tensors (`X`, `y`) for model
+    training, and their aligned raw NumPy counterparts (`x_raw`, `y_raw`).
+    Optional column names are stored to enable semantic lookup.
+
+    Core features:
+    - Generates PyTorch DataLoaders via `make_dataloader()`.
+    - Preserves traceability between normalized inputs and raw epidemiological
+      parameters after shuffling the full dataset by NosoiDataProcessor.
+    - Can be saved to and loaded from disk using `.pt` and `.npz` formats.
+    - Allows access to specific raw features and targets.
+
+    Useful for analysis of predictions in the context of their original
+    simulation inputs.
+    """
     X: torch.Tensor
     y: torch.Tensor
     x_raw: np.ndarray
@@ -141,8 +177,13 @@ class NosoiSplit:
         )
         raw = np.load(os.path.join(input_dir, f"{name}_raw.npz"))
 
-        x_raw_columns = raw["x_raw_columns"].tolist() if "x_raw_columns" in raw else None
-        y_raw_columns = raw["y_raw_columns"].tolist() if "y_raw_columns" in raw else None
+        x_raw_columns = raw.get("x_raw_columns", None)
+        if x_raw_columns is not None:
+            x_raw_columns = x_raw_columns.tolist()
+
+        y_raw_columns = raw.get("y_raw_columns", None)
+        if y_raw_columns is not None:
+            y_raw_columns = y_raw_columns.tolist()
 
         return cls(
             X=X,
