@@ -53,3 +53,41 @@ Edit [`R/config.R`](R/config.R) to set:
 Latin Hypercube Sampling (LHS) will be used to sample the specified parameter
 space, to ensure as many different parameter combinations as possible are
 simulated.
+
+
+### 2. Run Parallel *nosoi* Simulations
+
+The *nosoi* simulations batch script
+[`batch_scripts/batch.sh`](batch_scripts/batch.sh) is written for use on a
+cluster with SLURM installed. It will run one *nosoi* simulation per allocated
+CPU core. If the environmental variable `SLURM_CPUS_ON_NODE` is not found, for
+example when doing local testing the script will automatically use all
+available cores except one. Make sure to take a look at [`R/main.R`](R/main.R)
+for the full pipeline.
+
+Finally, make sure to set the working directory in
+[`batch_scripts/batch.sh`](batch_scripts/batch.sh) to where you cloned this
+repo and adjust the job name or allocated resources. Then, submit the job with:
+
+```bash
+sbatch batch_scripts/batch.sh
+```
+
+With current settings and resources, this script takes about 60 hours. It will
+also write a number of files to [`data/nosoi`](data/nosoi):
+
+| File                                 | Purpose                                                           |
+|--------------------------------------|-------------------------------------------------------------------|
+| master.csv                           | Contains simulation seeds and used *nosoi* parameters             |
+| summary_stats_export.csv             | Contains summary statistics computed over the transmission chains |
+| summary_statistics_distributions.pdf | Plots of all summary statistic distributions                      |
+| inftable_xxxxxxxxxx_mapped.parquet   | Full transmission chain, compressed and stored as Apache Parquet  |
+
+Note that the script outputs a single Parquet file per transmission chain,
+meaning that for 400,000 simulations you will get as many Parquet files. To
+download them from a cluster, it is more I/O friendly to first archive them
+with:
+
+```bash
+sbatch batch_scripts/tar_inftables.sh
+```
