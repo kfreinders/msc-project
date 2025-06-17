@@ -56,6 +56,7 @@ def main() -> None:
         level = csv_file.stem
         model_dir = Path("data/dnn") / level
         model_dir.mkdir(parents=True, exist_ok=True)
+        output_path = Path("data/tuning") / level
         metrics_path = model_dir / "metrics.json"
 
         if metrics_path.exists():
@@ -72,8 +73,8 @@ def main() -> None:
         val_split = NosoiSplit.load("val", split_dir)
         test_split = NosoiSplit.load("test", split_dir)
 
-        output_path = Path("data/tuning") / level / "results.json"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path = output_path / "results.json"
+        json_path.parent.mkdir(parents=True, exist_ok=True)
 
         best_cfg, _ = optuna_study(
             train_split,
@@ -81,6 +82,7 @@ def main() -> None:
             device,
             n_trials=100,
             study_name=f"study_{level}",
+            storage_path=output_path / "optuna_study.db"
         )
 
         logger.info(f"Best config for {level}: {best_cfg}")

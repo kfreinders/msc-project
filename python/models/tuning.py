@@ -244,6 +244,7 @@ def optuna_study(
     patience: int = 2,
     n_trials: int = 50,
     study_name: str = "nosoi_hyperparameter_tuning",
+    storage_path: Path = Path("optuna_studies/nosoi_study.db")
 ) -> tuple[HyperParams, float]:
     """
     Run Optuna study to find best hyperparameters.
@@ -265,15 +266,23 @@ def optuna_study(
         Number of Optuna trials.
     study_name : str
         Name of the Optuna study.
+    storage_path : str
+        Path to SQLite DB file for saving the study persistently.
 
     Returns
     -------
     tuple[HyperParams, float]
         Best hyperparameters and validation loss.
     """
+    # Ensure directory exists and use SQLite storage
+    Path(storage_path).parent.mkdir(parents=True, exist_ok=True)
+    storage_url = f"sqlite:///{storage_path}"
+
     study = optuna.create_study(
         direction="minimize",
         study_name=study_name,
+        storage=storage_url,
+        load_if_exists=True,
     )
     study.optimize(
         lambda trial: optuna_objective(
