@@ -221,7 +221,7 @@ def train_single_config(
     device: torch.device,
     max_epochs: int = 100,
     patience: int = 5,
-) -> float:
+) -> tuple[TrainableModel, float]:
     """
     Train a model with a single hyperparameter configuration.
 
@@ -247,8 +247,9 @@ def train_single_config(
 
     Returns
     -------
-    float
-        The lowest validation loss observed after training.
+    tuple[TrainableModel, float]
+        The trained NeuralNetwork and according lowest validation loss observed
+        after training.
     """
     # Get input and output dimensions
     input_dim = train_split.input_dim
@@ -266,7 +267,7 @@ def train_single_config(
         model, train_loader, val_loader, criterion, optimiser, device,
         epochs=max_epochs, patience=patience
     )
-    return float(min(hist["val_loss"]))
+    return model, float(min(hist["val_loss"]))
 
 
 def backup_json(path: Path) -> None:
@@ -353,7 +354,7 @@ def tune_model(
     # Loop over and test all hyperparameter combinations
     for i, cfg in enumerate(combinations, start=1):
         logger.info(f"Training configuration {i}/{len(combinations)}: {cfg}")
-        val_loss = train_single_config(
+        _, val_loss = train_single_config(
             cfg, model_factory, train_split, val_split,
             device, max_epochs=max_epochs, patience=patience
         )
