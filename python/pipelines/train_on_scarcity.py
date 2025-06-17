@@ -80,7 +80,7 @@ def main() -> None:
             train_split,
             val_split,
             device,
-            n_trials=100,
+            n_trials=50,
             study_name=f"study_{level}",
             storage_path=output_path / "optuna_study.db"
         )
