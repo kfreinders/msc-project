@@ -25,3 +25,31 @@ Neural Networks (GNNs).
 | Compute SHAP-values for summary statistics                            | ⏳ Planned     |
 | Explore the use of Graph Neural Networks                              | ⏳ Planned     |
 | Explore the use of Approximate Bayesian Computation                   | ⏳ Planned     |
+
+
+## Usage
+
+---
+
+### 1. Set *nosoi* Simulation Settings (R)
+
+Edit [`R/config.R`](R/config.R) to set:
+
+* The simulation parameters:
+    * The number of simulations
+    * The maximum simulation length in days
+    * The maximum allowed number of infected individuals
+    * The number of initially infected individuals
+    * The target output directory
+
+* Lower and upper bounds for each parameter of interest:
+    * Mean incubation time
+    * Standard deviation in incubation time
+    * Mean number of contacts per individual per time step
+    * Probability of transmission
+    * Probability of death
+    * Recovery time
+
+Latin Hypercube Sampling (LHS) will be used to sample the specified parameter
+space, to ensure as many different parameter combinations as possible are
+simulated.
