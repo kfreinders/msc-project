@@ -35,6 +35,7 @@ from dataclasses import asdict, dataclass
 from itertools import product
 import json
 import logging
+import optuna
 from random import sample
 from typing import Callable, Dict, Iterable, Sequence
 
@@ -176,6 +177,121 @@ def random_search(
     subset = sample(list(full_grid_search(search_space)), k=k)
     for config in subset:
         yield config
+
+
+def optuna_objective(
+    trial: optuna.Trial,
+    train_split: NosoiSplit,
+    val_split: NosoiSplit,
+    device: torch.device,
+    max_epochs: int,
+    patience: int,
+) -> float:
+    """
+    Objective function for Optuna hyperparameter optimization.
+
+    This function defines the hyperparameter search space, constructs a model
+    configuration using suggested values from the trial, trains the model on
+    the provided training split, and returns the validation loss as the
+    optimization objective.
+
+    Parameters
+    ----------
+    trial : optuna.Trial
+        The Optuna trial object used to suggest hyperparameter values.
+    train_split : NosoiSplit
+        Training data split used for model training.
+    val_split : NosoiSplit
+        Validation data split used to evaluate the model during tuning.
+    device : torch.device
+        Device on which to train the model (e.g., "cpu" or "cuda").
+    max_epochs : int
+        Maximum number of training epochs.
+    patience : int
+        Number of epochs to wait for improvement before early stopping.
+
+    Returns
+    -------
+    float
+        Validation loss of the trained model for the given hyperparameter
+        configuration.
+    """
+    cfg = HyperParams(
+        learning_rate=trial.suggest_float("learning_rate", 1e-4, 1e-2, log=True),
+        hidden_size=trial.suggest_categorical("hidden_size", [16, 32, 64, 128, 256]),
+        num_layers=trial.suggest_int("num_layers", 1, 5),
+        dropout_rate=trial.suggest_float("dropout_rate", 0.1, 0.3),
+        batch_size=trial.suggest_categorical("batch_size", [16, 32, 64, 128]),
+    )
+
+    _, val_loss = train_single_config(
+        cfg,
+        model_factory,
+        train_split,
+        val_split,
+        device,
+        max_epochs,
+        patience
+    )
+    return val_loss
+
+
+def optuna_study(
+    train_split: NosoiSplit,
+    val_split: NosoiSplit,
+    device: torch.device,
+    max_epochs: int = 30,
+    patience: int = 2,
+    n_trials: int = 50,
+    study_name: str = "nosoi_hyperparameter_tuning",
+) -> tuple[HyperParams, float]:
+    """
+    Run Optuna study to find best hyperparameters.
+
+    Parameters
+    ----------
+    train_split : NosoiSplit
+        Training data.
+    val_split : NosoiSplit
+        Validation data.
+    device : torch.device
+        Device for training.
+    max_epochs : int, optional
+        Maximum number of training epochs (default is 30).
+    patience : int, optional
+        Number of epochs with no improvement after which training is stopped
+        early (default is 5).
+    n_trials : int
+        Number of Optuna trials.
+    study_name : str
+        Name of the Optuna study.
+
+    Returns
+    -------
+    tuple[HyperParams, float]
+        Best hyperparameters and validation loss.
+    """
+    study = optuna.create_study(
+        direction="minimize",
+        study_name=study_name,
+    )
+    study.optimize(
+        lambda trial: optuna_objective(
+            trial,
+            train_split,
+            val_split,
+            device,
+            max_epochs,
+            patience
+        ),
+        n_trials=n_trials
+    )
+
+    best_cfg_dict = study.best_trial.params
+    best_cfg = HyperParams.from_dict(best_cfg_dict)
+    best_loss = study.best_value
+
+    return best_cfg, best_loss
 
 
 def model_factory(
