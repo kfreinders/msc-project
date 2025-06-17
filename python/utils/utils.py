@@ -24,46 +24,10 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 
 
-def evaluate_model(
-    model: torch.nn.Module,
-    test_loader: torch.utils.data.DataLoader,
-    criterion: torch.nn.modules.loss._Loss,
-    device: torch.device,
-) -> float:
-    """
-    Evaluate a trained model on a test set.
-
-    Parameters
-    ----------
-    model : torch.nn.Module
-        The trained neural network model.
-    test_loader : torch.utils.data.DataLoader
-        DataLoader for the test dataset.
-    criterion : torch.nn.modules.loss._Loss
-        Loss function used for evaluation.
-    device : torch.device
-        Device on which the model is evaluated (CPU or CUDA).
-
-    Returns
-    -------
-    float
-        Average loss on the test dataset.
-    """
-    model.eval()
-    total_loss = 0
-    with torch.no_grad():
-        for X, y in test_loader:
-            X, y = X.to(device), y.to(device)
-            total_loss += criterion(model(X), y).item()
-
-    avg_test_loss = total_loss / len(test_loader)
-    return avg_test_loss
-
-
 # Disable gradient calculation (important for inference only, saves memory)
 @torch.no_grad()
 def predict_nosoi_parameters(
-    model: torch.nn.Module,
+    model: TrainableModel,
     loader: torch.utils.data.DataLoader,
     device: torch.device,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -186,7 +150,7 @@ def plot_predictions(
     return fig
 
 
-def plot_scarce_distributions(csv_path: Path):
+def plot_scarce_distributions(csv_path: Path) -> matplotlib.figure.Figure:
     """
     Plot histograms for all SST_* columns in a scarce CSV file.
 
@@ -217,7 +181,8 @@ def plot_scarce_distributions(csv_path: Path):
 
     fig.suptitle(f"Distributions from {csv_path.name}", fontsize=14)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
-    plt.show()
+
+    return fig
 
 
 def save_torch_with_versioning(
