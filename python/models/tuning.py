@@ -37,7 +37,7 @@ import json
 import logging
 import optuna
 from random import sample
-from typing import Callable, Dict, Iterable, Sequence
+from typing import Callable, Dict, Iterable, Optional, Sequence
 
 import numpy as np
 from pathlib import Path
@@ -231,11 +231,13 @@ def optuna_objective(
         val_split,
         device,
         max_epochs,
-        patience
+        patience,
+        trial
     )
     return val_loss
 
 
+# TODO: maybe expose n_startup_trials=5, n_warmup_steps=3 ?
 def optuna_study(
     train_split: NosoiSplit,
     val_split: NosoiSplit,
@@ -283,6 +285,9 @@ def optuna_study(
         study_name=study_name,
         storage=storage_url,
         load_if_exists=True,
+        pruner=optuna.pruners.MedianPruner(
+            n_startup_trials=5, n_warmup_steps=3
+        ),
     )
     study.optimize(
         lambda trial: optuna_objective(
@@ -346,6 +351,7 @@ def train_single_config(
     device: torch.device,
     max_epochs: int = 100,
     patience: int = 5,
+    trial: Optional[optuna.Trial] = None
 ) -> tuple[TrainableModel, float]:
     """
     Train a model with a single hyperparameter configuration.
@@ -369,6 +375,10 @@ def train_single_config(
     patience : int, optional
         Number of epochs with no improvement after which training is stopped
         early (default is 5).
+    trial : optuna.Trial, optional
+        An Optuna trial object for reporting intermediate validation losses and
+        enabling pruning. If provided, training will report progress to Optuna
+        and allow underperforming trials to be pruned early.
 
     Returns
     -------
@@ -390,7 +400,7 @@ def train_single_config(
 
     model, hist = train(
         model, train_loader, val_loader, criterion, optimiser, device,
-        epochs=max_epochs, patience=patience
+        epochs=max_epochs, patience=patience, trial=trial
     )
     return model, float(min(hist["val_loss"]))
 

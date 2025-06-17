@@ -1,5 +1,6 @@
 import copy
-from typing import Tuple
+import optuna
+from typing import Optional, Tuple
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
@@ -24,7 +25,8 @@ def train(
     optimizer: Optimizer,
     device: torch.device,
     epochs: int = 100,
-    patience: int = 5
+    patience: int = 5,
+    trial: Optional[optuna.Trial] = None
 ) -> Tuple[TrainableModel, dict[str, list[float]]]:
     """
     Train a neural network model with early stopping.
@@ -48,6 +50,10 @@ def train(
     patience : int, optional
         Number of epochs with no improvement after which training is stopped
         early (default is 5).
+    trial : optuna.Trial, optional
+        An Optuna trial object for reporting intermediate validation losses and
+        enabling pruning. If provided, training will report progress to Optuna
+        and allow underperforming trials to be pruned early.
 
     Returns
     -------
@@ -128,7 +134,13 @@ def train(
                 logger.debug("Early stopping triggered.")
                 break
 
-    if best_model_state is not None:
-        model.load_state_dict(best_model_state)
+        # Optuna pruning
+        if trial:
+            trial.report(val_loss, epoch)
+            if trial.should_prune():
+                raise optuna.TrialPruned()
+
+            if best_model_state is not None:
+                model.load_state_dict(best_model_state)
 
     return model, history
