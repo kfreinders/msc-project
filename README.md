@@ -115,3 +115,37 @@ With current settings and resources, this script takes about 48 hours. It will
 not save the full mutated transmission chains (but is fully reproducible with a
 seed) but instead saves the recomputed summary statistics for each level of
 scarcity.
+
+
+### 4. Evaluate DNN Performance Under Data Scarcity
+
+Once the summary statistics have been generated for all scarcity levels, we
+train a deep neural network (DNN) to predict the original *nosoi* simulation
+parameters from these degraded features. The output paths and hyperparameter
+search space can be adjusted in
+[`python/pipelines/evaluate_scarcity.py/`](batch_scripts/create_scarce_data.sh).
+
+Finally, launch the tuning and training and training pipeline:
+
+```bash
+python -m pipelines.train_on_scarcity
+```
+
+This will:
+
+* Load the recomputed summary statistics and matching parameters
+* Split data into train/validation/test sets, if not already done
+* Perform hyperparameter tuning using Optuna
+* Train a DNN for each scarcity level (e.g., 5% to 50% RandomNodeDrop)
+* Save the best model and performance metrics for each level
+
+Each trained model and associated metrics are stored in [`data/dnn`](data/dnn)
+under a directory named after its scarcity level (e.g., `scarce_0.20/`),
+including:
+
+---
+
+
+## License
+
+MIT License.
