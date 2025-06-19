@@ -91,3 +91,27 @@ with:
 ```bash
 sbatch batch_scripts/tar_inftables.sh
 ```
+
+
+### 3. Degrade Transmission Chains and Compute Summary Statistics
+
+Real-world epidemiological data is seldom complete. To simulate this, we
+introduce artificial data scarcity in the transmission chains using
+RandomNodeDrop:
+* Randomly sample a certain percentage of nodes in the transmission chain and delete them
+* Children of deleted nodes are reconnected to their parent, simulating undocumented infections
+
+Settings like which percentages of RandomNodeDrop to apply can be set in
+[`python/create_scarce_data.py`](python/create_scarce_data.py), and the SLURM
+job name and resources can be set in
+[`batch_scripts/create_scarce_data.sh`](batch_scripts/create_scarce_data.sh).
+Finally, to submit the job, run:
+
+```bash
+sbatch batch_scripts/create_scarce_data.sh
+```
+
+With current settings and resources, this script takes about 48 hours. It will
+not save the full mutated transmission chains (but is fully reproducible with a
+seed) but instead saves the recomputed summary statistics for each level of
+scarcity.
