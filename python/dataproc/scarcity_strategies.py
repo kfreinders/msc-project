@@ -27,6 +27,11 @@ class RandomNodeDrop(DataScarcityStrategy):
         self.drop_fraction = drop_fraction
 
     def apply(self, graph: nx.DiGraph) -> nx.DiGraph:
+        # If drop_fraction is 0.0, then the graph remains unchanged and we can
+        # just return a copy of the original graph
+        if self.drop_fraction == 0.0:
+            return graph.copy()
+
         g = graph.copy()
         nodes = list(g.nodes)
         to_drop = random.sample(nodes, int(len(nodes) * self.drop_fraction))
