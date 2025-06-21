@@ -370,23 +370,35 @@ class NosoiDataProcessor:
         def tensor(array: np.ndarray, idx: np.ndarray) -> torch.Tensor:
             return torch.tensor(array[idx], dtype=torch.float32)
 
+        # Column names for features and targets
+        x_colnames = [
+            col for col in self.df.columns
+            if col.startswith("SST_")
+        ]
+        y_colnames = [
+            col.removeprefix("PAR_") for col in self.df.columns
+            if col.startswith("PAR_")
+        ]
+
         # Column names for raw features and targets
-        x_raw_cols = [
-            col for col in self.df.columns if col.startswith("RAW_SST_")
+        x_raw_colnames = [
+            col.removeprefix("RAW_") for col in self.df.columns
+            if col.startswith("RAW_SST_")
         ]
-        y_raw_cols = [
-            col for col in self.df.columns if col.startswith("RAW_PAR_")
+        y_raw_colnames = [
+            col.removeprefix("RAW_") for col in self.df.columns
+            if col.startswith("RAW_PAR_")
         ]
-        x_raw_names = [col.removeprefix("RAW_") for col in x_raw_cols]
-        y_raw_names = [col.removeprefix("RAW_") for col in y_raw_cols]
 
         split_train = NosoiSplit(
             tensor(X, train_idx),
             tensor(y, train_idx),
             X_raw[train_idx],
             y_raw[train_idx],
-            x_raw_columns=x_raw_names,
-            y_raw_columns=y_raw_names
+            x_raw_colnames=x_raw_colnames,
+            y_raw_colnames=y_raw_colnames,
+            x_colnames=x_colnames,
+            y_colnames=y_colnames
         )
 
         split_val = NosoiSplit(
@@ -394,8 +406,10 @@ class NosoiDataProcessor:
             tensor(y, val_idx),
             X_raw[val_idx],
             y_raw[val_idx],
-            x_raw_columns=x_raw_names,
-            y_raw_columns=y_raw_names
+            x_raw_colnames=x_raw_colnames,
+            y_raw_colnames=y_raw_colnames,
+            x_colnames=x_colnames,
+            y_colnames=y_colnames
         )
 
         split_test = NosoiSplit(
@@ -403,8 +417,10 @@ class NosoiDataProcessor:
             tensor(y, test_idx),
             X_raw[test_idx],
             y_raw[test_idx],
-            x_raw_columns=x_raw_names,
-            y_raw_columns=y_raw_names
+            x_raw_colnames=x_raw_colnames,
+            y_raw_colnames=y_raw_colnames,
+            x_colnames=x_colnames,
+            y_colnames=y_colnames
         )
 
         # Return named splits

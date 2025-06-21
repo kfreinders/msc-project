@@ -50,8 +50,10 @@ class NosoiSplit:
     y: torch.Tensor
     x_raw: np.ndarray
     y_raw: np.ndarray
-    x_raw_columns: Optional[list[str]] = None
-    y_raw_columns: Optional[list[str]] = None
+    x_raw_colnames: Optional[list[str]] = None
+    y_raw_colnames: Optional[list[str]] = None
+    x_colnames: Optional[list[str]] = None
+    y_colnames: Optional[list[str]] = None
 
     @property
     def input_dim(self) -> int:
@@ -119,7 +121,10 @@ class NosoiSplit:
         output_dir : Path
             Directory where the files will be saved.
         """
+        # Make output dir if it doesn't exist already
         os.makedirs(output_dir, exist_ok=True)
+
+        # Save the PyTorch tensors (X, y) as .pt
         torch.save(self.X, os.path.join(output_dir, f"{name}_x.pt"))
         torch.save(self.y, os.path.join(output_dir, f"{name}_y.pt"))
 
@@ -128,10 +133,15 @@ class NosoiSplit:
             "y_raw": self.y_raw,
         }
 
-        if self.x_raw_columns is not None:
-            raw_data["x_raw_columns"] = np.array(self.x_raw_columns)
-        if self.y_raw_columns is not None:
-            raw_data["y_raw_columns"] = np.array(self.y_raw_columns)
+        # Save column names if they exist
+        if self.x_raw_colnames is not None:
+            raw_data["x_raw_columns"] = np.array(self.x_raw_colnames)
+        if self.y_raw_colnames is not None:
+            raw_data["y_raw_columns"] = np.array(self.y_raw_colnames)
+        if self.x_colnames is not None:
+            raw_data["x_columns"] = np.array(self.x_colnames)
+        if self.y_colnames is not None:
+            raw_data["y_columns"] = np.array(self.y_colnames)
 
         np.savez(
             os.path.join(output_dir, f"{name}_raw.npz"),
@@ -185,13 +195,23 @@ class NosoiSplit:
         if y_raw_columns is not None:
             y_raw_columns = y_raw_columns.tolist()
 
+        x_columns = raw.get("x_columns", None)
+        if x_columns is not None:
+            x_columns = x_columns.tolist()
+
+        y_columns = raw.get("y_columns", None)
+        if y_columns is not None:
+            y_columns = y_columns.tolist()
+
         return cls(
             X=X,
             y=y,
             x_raw=raw["x_raw"],
             y_raw=raw["y_raw"],
-            x_raw_columns=x_raw_columns,
-            y_raw_columns=y_raw_columns
+            x_raw_colnames=x_raw_columns,
+            y_raw_colnames=y_raw_columns,
+            x_colnames=x_columns,
+            y_colnames=y_columns
         )
 
     def get_raw_feature(self, name: str) -> np.ndarray:
@@ -213,10 +233,10 @@ class NosoiSplit:
         ValueError
             If column names are not available or the name is not found.
         """
-        if self.x_raw_columns is None:
+        if self.x_raw_colnames is None:
             raise ValueError("x_raw column names are not available.")
         try:
-            idx = self.x_raw_columns.index(name)
+            idx = self.x_raw_colnames.index(name)
         except ValueError:
             raise ValueError(f"Column '{name}' not found in x_raw_columns.")
         return self.x_raw[:, idx]
