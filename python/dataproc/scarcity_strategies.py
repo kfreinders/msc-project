@@ -30,7 +30,7 @@ class RandomNodeDrop(DataScarcityStrategy):
         # If drop_fraction is 0.0, then the graph remains unchanged and we can
         # just return a copy of the original graph
         if self.drop_fraction == 0.0:
-            return graph.copy()
+            return graph
 
         g = graph.copy()
         nodes = list(g.nodes)
