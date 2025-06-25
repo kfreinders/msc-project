@@ -117,7 +117,7 @@ def main() -> None:
     logger.info("Starting main pipeline")
     input_path = Path("data/nosoi")
     output_path = Path("data/scarce_stats")
-    levels = np.linspace(0.05, 0.5, num=10)
+    levels = np.linspace(0.00, 0.5, num=11)
 
     logger.info(f"Input path to Parquet files: {input_path}")
     logger.info(f"Output path: {output_path}")
