@@ -5,7 +5,7 @@ import networkx as nx
 
 class DataScarcityStrategy(ABC):
     @abstractmethod
-    def apply(self, graph: nx.DiGraph) -> nx.DiGraph:
+    def apply(self, graph: nx.DiGraph, seed: int) -> nx.DiGraph:
         """
         Apply a specific data scarcity strategy to the input graph.
 
@@ -13,6 +13,8 @@ class DataScarcityStrategy(ABC):
         ----------
         graph : nx.DiGraph
             The reconstructed nosoi transmission/contact graph.
+        seed : int
+            Seed to reproduce the data scarcity strategy.
 
         Returns
         -------
@@ -26,7 +28,7 @@ class RandomNodeDrop(DataScarcityStrategy):
     def __init__(self, drop_fraction: float):
         self.drop_fraction = drop_fraction
 
-    def apply(self, graph: nx.DiGraph) -> nx.DiGraph:
+    def apply(self, graph: nx.DiGraph, seed: int) -> nx.DiGraph:
         # If drop_fraction is 0.0, then the graph remains unchanged and we can
         # just return a copy of the original graph
         if self.drop_fraction == 0.0:
@@ -34,7 +36,9 @@ class RandomNodeDrop(DataScarcityStrategy):
 
         g = graph.copy()
         nodes = list(g.nodes)
-        to_drop = random.sample(nodes, int(len(nodes) * self.drop_fraction))
+
+        rng = random.Random(seed)
+        to_drop = rng.sample(nodes, int(len(nodes) * self.drop_fraction))
 
         for node in to_drop:
             if g.has_node(node):
