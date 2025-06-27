@@ -5,6 +5,7 @@ import os
 import pandas as pd
 from pathlib import Path
 import seaborn as sns
+from sklearn.metrics import label_ranking_loss, r2_score
 import torch
 from typing import Optional
 import logging
@@ -122,6 +123,9 @@ def plot_predictions(
     for i in range(n_params):
         ax = axes[i]
 
+        # Compute the R squared score
+        r2 = r2_score(trues[:, i], preds[:, i])
+
         if color_by is not None:
             scatter = ax.scatter(
                 trues[:, i], preds[:, i],
@@ -130,13 +134,26 @@ def plot_predictions(
         else:
             ax.scatter(trues[:, i], preds[:, i], alpha=0.3)
 
+        # Reference line
         min_val = min(trues[:, i].min(), preds[:, i].min())
         max_val = max(trues[:, i].max(), preds[:, i].max())
         ax.plot([min_val, max_val], [min_val, max_val], 'k--', lw=1)
 
-        ax.set_xlabel("True Values")
-        ax.set_ylabel("Predicted Values")
-        ax.set_title(param_names[i] if param_names else f"Parameter {i}")
+        # Label and R² annotation
+        ax.set_xlabel("True Values", fontsize=14)
+        ax.set_ylabel("Predicted Values", fontsize=14)
+        ax.set_title(
+            param_names[i] if param_names else f"Parameter {i}", fontsize=20
+        )
+        ax.text(
+            0.05, 0.95,
+            f"$R^2 = {r2:.2f}$",
+            transform=ax.transAxes,
+            fontsize=16,
+            verticalalignment="top",
+            horizontalalignment="left",
+            bbox=dict(facecolor="white", edgecolor="none", alpha=0.6)
+        )
 
     # Hide unused axes
     for i in range(n_params, len(axes)):
