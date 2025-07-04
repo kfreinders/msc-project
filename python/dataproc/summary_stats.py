@@ -546,3 +546,46 @@ def compute_summary_statistics(
     return pd.DataFrame([{
         key: value for section in sections for key, value in section.items()
     }])
+
+
+def sst_to_name(sst: str) -> str:
+    names = {
+        "SST_00": "n_noninfectors",
+        "SST_01": "mean_secinf",
+        "SST_02": "med_secinf",
+        "SST_03": "var_secinf",
+        "SST_04": "frac_top_50",
+        "SST_05": "frac_secinf",
+        "SST_06": "n_hosts",
+        "SST_07": "mean_infperday",
+        "SST_08": "mean_inftime",
+        "SST_09": "med_inftime",
+        "SST_10": "var_inftime",
+        "SST_11": "n_final_active",
+        "SST_12": "frac_final_active",
+        "SST_13": "mean_inflag",
+        "SST_14": "med_inflag",
+        "SST_15": "var_inflag",
+        "SST_16": "mean_min_inflag",
+        "SST_17": "frac_simtime",
+        "SST_18": "graph_mean_degree",
+        "SST_19": "graph_clustering_coeff",
+        "SST_20": "graph_density",
+        "SST_21": "graph_diameter",
+        "SST_22": "graph_ego",
+        "SST_23": "graph_radius",
+        "SST_24": "graph_global_efficiency",
+        "SST_25": "n_deaths",
+        "SST_26": "frac_deaths",
+        "SST_27": "mean_ttd",
+        "SST_28": "var_ttd",
+        "SST_29": "n_recov",
+        "SST_30": "frac_recov",
+        "SST_31": "mean_ttr",
+        "SST_32": "var_ttr",
+    }
+
+    if sst in names:
+        return names[sst]
+
+    return sst
