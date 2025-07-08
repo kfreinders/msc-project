@@ -87,6 +87,14 @@ def main() -> None:
 
         logger.info(f"Best config for {level}: {best_cfg}")
 
+        # Save best config to JSON
+        best_config_path = model_dir / "best_config.json"
+        with best_config_path.open("w") as f:
+            json.dump(best_cfg.as_dict(), f, indent=4)
+
+        logger.info(
+            f"Exported best hyperparameter config to {best_config_path}"
+        )
         # Retrain model
         trained_model, _ = train_single_config(
             best_cfg,
