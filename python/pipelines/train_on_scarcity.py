@@ -44,7 +44,7 @@ def main() -> None:
     logger.info(f"Using device: {device}")
 
     search_space: dict[str, Sequence[int | float]] = {
-        "learning_rate": [1e-2, 1e-3, 3e-4, 1e-4],
+        "learning_rate": [1e-2, 1e-3, 1e-4, 1e-5],
         "hidden_size": [16, 32, 64, 128, 256],
         "num_layers": [1, 2, 3, 4, 5],
         "dropout_rate": [0.1, 0.2, 0.3],
