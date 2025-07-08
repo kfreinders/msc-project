@@ -276,6 +276,8 @@ def optuna_study(
     tuple[HyperParams, float]
         Best hyperparameters and validation loss.
     """
+    logger = logging.getLogger(__name__)
+
     # Ensure directory exists and use SQLite storage
     Path(storage_path).parent.mkdir(parents=True, exist_ok=True)
     storage_url = f"sqlite:///{storage_path}"
@@ -289,17 +291,25 @@ def optuna_study(
             n_startup_trials=5, n_warmup_steps=3
         ),
     )
-    study.optimize(
-        lambda trial: optuna_objective(
-            trial,
-            train_split,
-            val_split,
-            device,
-            max_epochs,
-            patience
-        ),
-        n_trials=n_trials
-    )
+
+    # Only run the study if it hasn't yet concluded
+    if (
+        len(study.trials) < n_trials and
+        not all(t.state.is_finished() for t in study.trials)
+    ):
+        study.optimize(
+            lambda trial: optuna_objective(
+                trial,
+                train_split,
+                val_split,
+                device,
+                max_epochs,
+                patience
+            ),
+            n_trials=n_trials
+        )
+    else:
+        logger.info(f"{study_name} already finished. Nothing to do")
 
     best_cfg_dict = study.best_trial.params
     best_cfg = HyperParams.from_dict(best_cfg_dict)
