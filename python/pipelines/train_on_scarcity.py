@@ -10,6 +10,7 @@ from typing import Sequence
 from dataproc.nosoi_data_manger import NosoiDataProcessor
 from dataproc.nosoi_split import NosoiSplit
 from utils.logging_config import setup_logging
+from utils.utils import save_torch_with_versioning
 from models.tuning import (
     set_seed,
     model_factory,
@@ -56,24 +57,25 @@ def main() -> None:
         level = csv_file.stem
         model_dir = Path("data/dnn") / level
         model_dir.mkdir(parents=True, exist_ok=True)
-        output_path = Path("data/tuning") / level
+        root_path = Path("data/dnn") / level
         metrics_path = model_dir / "metrics.json"
 
         if metrics_path.exists():
-            logger.info(f"Skipping {level} — already completed.")
+            logger.info(f"Skipping {level}: already completed.")
             continue
 
         start_time = time.time()
 
-        logger.info(f"Generating data splits for {csv_file}")
+        logger.info(f"Generating data splits for {csv_file} ...")
         split_dir = NosoiDataProcessor.prepare_for_scarcity(
-            csv_file, dir_master_csv)
+            csv_file, dir_master_csv
+        )
 
         train_split = NosoiSplit.load("train", split_dir)
         val_split = NosoiSplit.load("val", split_dir)
         test_split = NosoiSplit.load("test", split_dir)
 
-        json_path = output_path / "results.json"
+        json_path = root_path / "results.json"
         json_path.parent.mkdir(parents=True, exist_ok=True)
 
         best_cfg, _ = optuna_study(
@@ -82,7 +84,7 @@ def main() -> None:
             device,
             n_trials=50,
             study_name=f"study_{level}",
-            storage_path=output_path / "optuna_study.db"
+            storage_path=root_path / "optuna_study.db"
         )
 
         logger.info(f"Best config for {level}: {best_cfg}")
@@ -95,6 +97,7 @@ def main() -> None:
         logger.info(
             f"Exported best hyperparameter config to {best_config_path}"
         )
+
         # Retrain model
         trained_model, _ = train_single_config(
             best_cfg,
@@ -103,6 +106,16 @@ def main() -> None:
             val_split,
             device
         )
+
+        # Save the trained model if it doesn't exist yet.
+        model_path = root_path / "regressor.pt"
+        if model_path.is_file():
+            logger.info(f"{model_path} already exists: not overwriting")
+        else:
+            torch.save(trained_model.state_dict(), model_path)
+            save_torch_with_versioning(
+                trained_model, model_path
+            )
 
         # Evaluate on test set
         test_loader = test_split.make_dataloader(best_cfg.batch_size)
