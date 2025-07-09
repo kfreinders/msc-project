@@ -8,8 +8,11 @@ import time
 import torch
 from typing import Sequence
 
+from torch.utils.data import DataLoader
+
 from dataproc.nosoi_data_manger import NosoiDataProcessor
 from dataproc.nosoi_split import NosoiSplit
+from models.interfaces import TrainableModel
 from utils.logging_config import setup_logging
 from utils.utils import predict_nosoi_parameters, save_torch_with_versioning
 from models.tuning import (
@@ -18,6 +21,26 @@ from models.tuning import (
     optuna_study,
     train_single_config
 )
+
+
+def compute_r2_per_param(
+    model: TrainableModel,
+    test_split: NosoiSplit,
+    test_loader: DataLoader,
+    device: torch.device
+) -> dict[str, float]:
+    r2_values: dict[str, float] = {}
+    preds, trues = predict_nosoi_parameters(
+        model,
+        test_loader,
+        device
+    )
+    n_params = preds.shape[1]
+    for i in range(n_params):
+        parameter = test_split.y_colnames[i] if test_split.y_colnames else str(i)
+        r2 = r2_score(trues[:, i], preds[:, i])
+        r2_values[parameter] = float(r2)
+    return r2_values
 
 
 def main() -> None:
@@ -140,17 +163,12 @@ def main() -> None:
         rows.append((level, f"{test_loss:.4f}"))
 
         # Get R-squared values for each parameter
-        r2_values: dict[str, float] = {}
-        preds, trues = predict_nosoi_parameters(
+        r2_values = compute_r2_per_param(
             trained_model,
+            test_split,
             test_loader,
             device
         )
-        n_params = preds.shape[1]
-        for i in range(n_params):
-            parameter = test_split.y_colnames[i]
-            r2 = r2_score(trues[:, i], preds[:, i])
-            r2_values[parameter] = r2
         logger.info(r2_values)
 
     # Save summary CSV
