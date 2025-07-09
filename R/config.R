@@ -1,7 +1,7 @@
 nosoi_settings <- list(
   n_sim = 4e5,            # Number of simulations to run
   length = 100,           # Simulation length in days
-  max_infected = 10000,   # Maximum number of infected individuals
+  max_infected = 50000,   # Maximum number of infected individuals
   init_individuals = 1    # Initial number of infected individuals
 )
 
