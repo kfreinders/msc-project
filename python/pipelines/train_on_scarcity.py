@@ -3,6 +3,7 @@ from pathlib import Path
 import csv
 import json
 import logging
+from sklearn.metrics import r2_score
 import time
 import torch
 from typing import Sequence
@@ -10,7 +11,7 @@ from typing import Sequence
 from dataproc.nosoi_data_manger import NosoiDataProcessor
 from dataproc.nosoi_split import NosoiSplit
 from utils.logging_config import setup_logging
-from utils.utils import save_torch_with_versioning
+from utils.utils import predict_nosoi_parameters, save_torch_with_versioning
 from models.tuning import (
     set_seed,
     model_factory,
@@ -137,6 +138,20 @@ def main() -> None:
             f"Test loss: {test_loss:.4f}"
         )
         rows.append((level, f"{test_loss:.4f}"))
+
+        # Get R-squared values for each parameter
+        r2_values: dict[str, float] = {}
+        preds, trues = predict_nosoi_parameters(
+            trained_model,
+            test_loader,
+            device
+        )
+        n_params = preds.shape[1]
+        for i in range(n_params):
+            parameter = test_split.y_colnames[i]
+            r2 = r2_score(trues[:, i], preds[:, i])
+            r2_values[parameter] = r2
+        logger.info(r2_values)
 
     # Save summary CSV
     metrics_csv.parent.mkdir(parents=True, exist_ok=True)
