@@ -28,6 +28,27 @@ def evaluate_model(
     test_loader: DataLoader,
     device: torch.device,
 ) -> float:
+    """
+    Evaluate the trained model on the test dataset using Mean Squared Error.
+
+    This function computes the average MSE loss of the model predictions on the
+    provided test dataset. It disables gradient tracking to speed up evaluation
+    and reduce memory usage.
+
+    Parameters
+    ----------
+    model : TrainableModel
+        The trained PyTorch model used to generate predictions.
+    test_loader : DataLoader
+        DataLoader object providing the test dataset in mini-batches.
+    device : torch.device
+        The device (CPU or CUDA) on which computation should be performed.
+
+    Returns
+    -------
+    float
+        The average MSE loss over all batches in the test set.
+    """
     criterion = torch.nn.MSELoss()
     total_loss = 0.0
     model.eval()
@@ -44,6 +65,30 @@ def compute_r2_per_param(
     test_loader: DataLoader,
     device: torch.device
 ) -> dict[str, float]:
+    """
+    Compute the coefficient of determination for each predicted parameter.
+
+    This function evaluates the predictive performance of the model on the test
+    dataset by calculating the R^2 score for each output dimension. It uses the
+    true and predicted parameter values for each sample and returns a
+    dictionary mapping each parameter name to its corresponding R^2 score.
+
+    Parameters
+    ----------
+    model : TrainableModel
+        The trained model to be evaluated.
+    test_split : NosoiSplit
+        The test split containing metadata such as output column names.
+    test_loader : DataLoader
+        DataLoader providing batched test data.
+    device : torch.device
+        The device (CPU or CUDA) to use.
+
+    Returns
+    -------
+    dict[str, float]
+        A dictionary where keys are parameter names and values are R² scores.
+    """
     r2_values: dict[str, float] = {}
     preds, trues = predict_nosoi_parameters(
         model,
@@ -52,7 +97,10 @@ def compute_r2_per_param(
     )
     n_params = preds.shape[1]
     for i in range(n_params):
-        parameter = test_split.y_colnames[i] if test_split.y_colnames else str(i)
+        parameter = (
+            test_split.y_colnames[i]
+            if test_split.y_colnames else str(i)
+        )
         r2 = r2_score(trues[:, i], preds[:, i])
         r2_values[parameter] = float(r2)
     return r2_values
