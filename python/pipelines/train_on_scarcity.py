@@ -23,6 +23,21 @@ from models.tuning import (
 )
 
 
+def evaluate_model(
+    model: TrainableModel,
+    test_loader: DataLoader,
+    device: torch.device,
+) -> float:
+    criterion = torch.nn.MSELoss()
+    total_loss = 0.0
+    model.eval()
+    with torch.no_grad():
+        for X, y in test_loader:
+            X, y = X.to(device), y.to(device)
+            total_loss += criterion(model(X), y).item()
+    return total_loss / len(test_loader)
+
+
 def compute_r2_per_param(
     model: TrainableModel,
     test_split: NosoiSplit,
@@ -141,16 +156,15 @@ def main() -> None:
                 trained_model, model_path
             )
 
-        # Evaluate on test set
+        # Make the test set dataloader
         test_loader = test_split.make_dataloader(best_cfg.batch_size)
-        trained_model.eval()
-        criterion = torch.nn.MSELoss()
-        test_loss = 0.0
-        with torch.no_grad():
-            for X, y in test_loader:
-                X, y = X.to(device), y.to(device)
-                test_loss += criterion(trained_model(X), y).item()
-        test_loss /= len(test_loader)
+
+        # Evaluate model on test set
+        test_loss = evaluate_model(
+            trained_model,
+            test_loader,
+            device,
+        )
 
         # Save test loss to metrics file
         with metrics_path.open("w") as f:
