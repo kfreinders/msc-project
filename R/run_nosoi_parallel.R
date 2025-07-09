@@ -34,21 +34,11 @@ create_worker <- function(db_name, output_folder, nosoi_settings) {
         # Assign host fates
         hosts_table <- determine_fate(hosts_table)
 
-        # Compute summary statistics
-        summary_statistics <- compute_summary_statistics(
-          hosts_table, nosoi_settings, simtime
-        )
-
         # Save the infection table to a Parquet file
         save_inftable_compressed(hosts_table, output_folder, seed, simtime)
         
         end_time <- Sys.time()  # End timing
         elapsed_time <- round(difftime(end_time, start_time, units = "secs"), 2)
-        
-        # Store summary statistics in SQLite
-        db <- dbConnect(RSQLite::SQLite(), db_name)
-        write_summary_statistics(db, seed, summary_statistics) 
-        dbDisconnect(db)  # Close connection after writing
         
         # Logging
         print_log(seed, nrow(hosts_table), elapsed_time)

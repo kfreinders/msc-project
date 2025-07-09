@@ -23,7 +23,6 @@ suppressPackageStartupMessages({
 source("R/config.R")
 source("R/sample_parameters.R")
 source("R/nosoi_sim.R")
-source("R/summary_statistics.R")
 source("R/sqlite.R")
 source("R/run_nosoi_parallel.R")
 source("R/utils.R")
@@ -46,10 +45,6 @@ df <- resume_or_generate_parameters(
 
 print_section("RUNNING NOSOI SIMULATIONS")
 
-# Create a table in an SQLite database to store generated summary statistics
-initialize_db(db_name)
-cat("SQLite database connection successfully established\n")
-
 # Get the number of available cores
 num_cores <- if (Sys.getenv("SLURM_CPUS_ON_NODE") != "") {
   as.numeric(Sys.getenv("SLURM_CPUS_ON_NODE"))  # Running as a SLURM job
@@ -65,9 +60,6 @@ cat(sprintf(
 mc_stats <- run_nosoi_parallel(
   df, db_name, output_folder, num_cores, nosoi_settings
 )
-
-# Export the summary_statistics to a csv
-export_db_to_csv(db_name, ss_filename)
 
 end_time <- Sys.time()  # End timing
 elapsed_time <- round(difftime(end_time, start_time, units = "secs"), 2)
