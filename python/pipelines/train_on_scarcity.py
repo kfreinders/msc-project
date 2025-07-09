@@ -8,8 +8,11 @@ import time
 import torch
 from typing import Sequence
 
+from torch.utils.data import DataLoader
+
 from dataproc.nosoi_data_manger import NosoiDataProcessor
 from dataproc.nosoi_split import NosoiSplit
+from models.interfaces import TrainableModel
 from utils.logging_config import setup_logging
 from utils.utils import predict_nosoi_parameters, save_torch_with_versioning
 from models.tuning import (
@@ -18,6 +21,89 @@ from models.tuning import (
     optuna_study,
     train_single_config
 )
+
+
+def evaluate_model(
+    model: TrainableModel,
+    test_loader: DataLoader,
+    device: torch.device,
+) -> float:
+    """
+    Evaluate the trained model on the test dataset using Mean Squared Error.
+
+    This function computes the average MSE loss of the model predictions on the
+    provided test dataset. It disables gradient tracking to speed up evaluation
+    and reduce memory usage.
+
+    Parameters
+    ----------
+    model : TrainableModel
+        The trained PyTorch model used to generate predictions.
+    test_loader : DataLoader
+        DataLoader object providing the test dataset in mini-batches.
+    device : torch.device
+        The device (CPU or CUDA) on which computation should be performed.
+
+    Returns
+    -------
+    float
+        The average MSE loss over all batches in the test set.
+    """
+    criterion = torch.nn.MSELoss()
+    total_loss = 0.0
+    model.eval()
+    with torch.no_grad():
+        for X, y in test_loader:
+            X, y = X.to(device), y.to(device)
+            total_loss += criterion(model(X), y).item()
+    return total_loss / len(test_loader)
+
+
+def compute_r2_per_param(
+    model: TrainableModel,
+    test_split: NosoiSplit,
+    test_loader: DataLoader,
+    device: torch.device
+) -> dict[str, float]:
+    """
+    Compute the coefficient of determination for each predicted parameter.
+
+    This function evaluates the predictive performance of the model on the test
+    dataset by calculating the R^2 score for each output dimension. It uses the
+    true and predicted parameter values for each sample and returns a
+    dictionary mapping each parameter name to its corresponding R^2 score.
+
+    Parameters
+    ----------
+    model : TrainableModel
+        The trained model to be evaluated.
+    test_split : NosoiSplit
+        The test split containing metadata such as output column names.
+    test_loader : DataLoader
+        DataLoader providing batched test data.
+    device : torch.device
+        The device (CPU or CUDA) to use.
+
+    Returns
+    -------
+    dict[str, float]
+        A dictionary where keys are parameter names and values are R² scores.
+    """
+    r2_values: dict[str, float] = {}
+    preds, trues = predict_nosoi_parameters(
+        model,
+        test_loader,
+        device
+    )
+    n_params = preds.shape[1]
+    for i in range(n_params):
+        parameter = (
+            test_split.y_colnames[i]
+            if test_split.y_colnames else str(i)
+        )
+        r2 = r2_score(trues[:, i], preds[:, i])
+        r2_values[parameter] = float(r2)
+    return r2_values
 
 
 def main() -> None:
@@ -118,16 +204,15 @@ def main() -> None:
                 trained_model, model_path
             )
 
-        # Evaluate on test set
+        # Make the test set dataloader
         test_loader = test_split.make_dataloader(best_cfg.batch_size)
-        trained_model.eval()
-        criterion = torch.nn.MSELoss()
-        test_loss = 0.0
-        with torch.no_grad():
-            for X, y in test_loader:
-                X, y = X.to(device), y.to(device)
-                test_loss += criterion(trained_model(X), y).item()
-        test_loss /= len(test_loader)
+
+        # Evaluate model on test set
+        test_loss = evaluate_model(
+            trained_model,
+            test_loader,
+            device,
+        )
 
         # Save test loss to metrics file
         with metrics_path.open("w") as f:
@@ -140,17 +225,12 @@ def main() -> None:
         rows.append((level, f"{test_loss:.4f}"))
 
         # Get R-squared values for each parameter
-        r2_values: dict[str, float] = {}
-        preds, trues = predict_nosoi_parameters(
+        r2_values = compute_r2_per_param(
             trained_model,
+            test_split,
             test_loader,
             device
         )
-        n_params = preds.shape[1]
-        for i in range(n_params):
-            parameter = test_split.y_colnames[i]
-            r2 = r2_score(trues[:, i], preds[:, i])
-            r2_values[parameter] = r2
         logger.info(r2_values)
 
     # Save summary CSV
