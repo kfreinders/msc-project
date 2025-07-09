@@ -242,7 +242,7 @@ def optuna_study(
     train_split: NosoiSplit,
     val_split: NosoiSplit,
     device: torch.device,
-    max_epochs: int = 30,
+    max_epochs: int = 100,
     patience: int = 2,
     n_trials: int = 50,
     study_name: str = "nosoi_hyperparameter_tuning",
@@ -260,7 +260,7 @@ def optuna_study(
     device : torch.device
         Device for training.
     max_epochs : int, optional
-        Maximum number of training epochs (default is 30).
+        Maximum number of training epochs (default is 100).
     patience : int, optional
         Number of epochs with no improvement after which training is stopped
         early (default is 5).
