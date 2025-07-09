@@ -5,7 +5,7 @@ import os
 import pandas as pd
 from pathlib import Path
 import seaborn as sns
-from sklearn.metrics import label_ranking_loss, r2_score
+from sklearn.metrics import r2_score
 import torch
 from typing import Optional
 import logging
