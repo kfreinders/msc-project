@@ -8,7 +8,7 @@
 #SBATCH --error=create_scarce_data_%j.err
 
 # Move to project root
-cd /home4/s3919323/msc-project
+cd /scratch/s3919323/msc-project
 
 # Purge all modules and Python
 module purge

@@ -13,7 +13,7 @@ echo -e '#                          PARALLEL PROCESSING SCRIPT                  
 echo -e '################################################################################'
 
 # Move to project root
-cd /home4/s3919323/msc-project
+cd /scratch/s3919323/msc-project
 echo -e "\nWorking directory: $(pwd)"
 
 # Purge all modules and load R

@@ -8,7 +8,7 @@
 #SBATCH --error=make_tarball_%j.err
 
 # Move to project root
-cd /home4/s3919323/msc-project
+cd /projects/scratch/msc-project
 echo -e "\nWorking directory: $(pwd)"
 
 find data/nosoi/ -name "inftable_*.parquet" -print0 | \
