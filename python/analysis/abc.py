@@ -1,4 +1,3 @@
-
 """
 Approximate Bayesian Computation (ABC) Inference for nosoi Simulations
 
@@ -23,6 +22,7 @@ Dependencies
 - pandas
 - seaborn
 - sklearn
+- torch
 
 Examples
 --------
@@ -39,12 +39,13 @@ NosoiSplit : Class for loading and managing simulation splits
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from pathlib import Path
-from typing import Callable, Dict, Tuple
+from typing import Callable, Dict
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from sklearn.linear_model import LinearRegression
 import torch
 
 from dataproc.nosoi_split import NosoiSplit
@@ -96,44 +97,63 @@ def euclidean_distance(obs: torch.Tensor, sim: torch.Tensor) -> float:
     return float(torch.norm(obs - sim))
 
 
-def abc_from_tensor(
+def abc_regression_adjustment(
     obs_stats: torch.Tensor,
     sim_stats: torch.Tensor,
     sim_params: torch.Tensor,
     distance_fn: Callable[[torch.Tensor, torch.Tensor], float],
-    epsilon: float
-) -> Tuple[torch.Tensor, torch.Tensor]:
+    quantile: float = 0.01
+) -> torch.Tensor:
     """
-    Perform ABC rejection using precomputed summary statistics and parameters.
+    Perform ABC with regression adjustment.
 
     Parameters
     ----------
     obs_stats : torch.Tensor
-        1D tensor of observed summary statistics (e.g. shape (33,))
+        1D tensor of observed summary statistics.
     sim_stats : torch.Tensor
-        2D tensor of all simulated summary statistics (e.g. shape (N, 33))
+        2D tensor of all simulated summary statistics.
     sim_params : torch.Tensor
-        2D tensor of all true parameters corresponding to sim_stats (e.g. shape
-        (N, 5))
+        2D tensor of all true parameters corresponding to sim_stats.
     distance_fn : Callable
-        A function to compute distance between summary statistics.
-    epsilon : float
-        Distance threshold for acceptance.
+        Function to compute distance between summary statistics.
+    quantile : float
+        Proportion of simulations to keep (e.g. 0.01 keeps 1% closest samples).
 
     Returns
     -------
-    Tuple[torch.Tensor, torch.Tensor]
-        A tuple of (accepted_parameters, distances), where accepted_parameters
-        has shape (M, 5)
+    torch.Tensor
+        Posterior mean estimate after regression adjustment.
     """
-    accepted = []
-    distances = []
-    for i in range(sim_stats.shape[0]):
-        dist = distance_fn(obs_stats, sim_stats[i])
-        if dist < epsilon:
-            accepted.append(sim_params[i])
-            distances.append(dist)
-    return torch.stack(accepted), torch.tensor(distances)
+    # Step 1: Compute distances
+    distances = torch.tensor(
+        [distance_fn(obs_stats, sim) for sim in sim_stats]
+    )
+    k = max(1, int(len(distances) * quantile))
+    closest_indices = torch.topk(distances, k=k, largest=False).indices
+
+    X = sim_stats[closest_indices]
+    y = sim_params[closest_indices]
+
+    # Center summary statistics around the observation
+    X_centered = X - obs_stats
+
+    # Step 2–3: Regression-adjusted ABC for each parameter
+    adjusted_params = []
+
+    for i in range(y.shape[1]):
+        reg = LinearRegression()
+        reg.fit(X_centered.numpy(), y[:, i].numpy())
+        y_pred = reg.predict(X_centered.numpy())
+
+        # Adjustment
+        adjusted = y[:, i].numpy() - (y_pred - reg.intercept_)
+        adjusted_params.append(adjusted)
+
+    # Stack and return mean adjusted posterior
+    adjusted_params = [i.tolist() for i in adjusted_params]
+    adjusted_tensor = torch.tensor(adjusted_params).T
+    return adjusted_tensor.mean(dim=0)
 
 
 def run_abc_for_index(
@@ -141,10 +161,11 @@ def run_abc_for_index(
     obs_all: torch.Tensor,
     params_all: torch.Tensor,
     param_names: list[str],
-    epsilon: float,
+    quantile: float = 0.01,
+    distance_fn: Callable[[torch.Tensor, torch.Tensor], float] = euclidean_distance
 ) -> dict | None:
     """
-    Run ABC for a single pseudo-observation index.
+    Run ABC with regression adjustment for a single pseudo-observation index.
 
     Parameters
     ----------
@@ -156,8 +177,10 @@ def run_abc_for_index(
         Tensor of true simulation parameters.
     param_names : list[str]
         Parameter names (used to construct true/post keys).
-    epsilon : float
-        ABC acceptance threshold.
+    quantile : float
+        Proportion of closest simulations to keep (default 0.01).
+    distance_fn : Callable
+        Distance function to compare summary statistics.
 
     Returns
     -------
@@ -166,28 +189,27 @@ def run_abc_for_index(
     """
     obs_stats = obs_all[i]
 
-    accepted_params, _ = abc_from_tensor(
-        obs_stats=obs_stats,
-        sim_stats=obs_all,
-        sim_params=params_all,
-        distance_fn=euclidean_distance,
-        epsilon=epsilon,
-    )
-
-    if len(accepted_params) == 0:
-        print(f"ABC failed: no accepted samples for idx={i}")
+    try:
+        adjusted_mean = abc_regression_adjustment(
+            obs_stats=obs_stats,
+            sim_stats=obs_all,
+            sim_params=params_all,
+            distance_fn=distance_fn,
+            quantile=quantile
+        )
+    except Exception as e:
+        print(f"ABC failed for idx={i}: {e}")
         return None
 
     result = {
         "idx": i,
-        "epsilon": epsilon,
-        "n_accepted": len(accepted_params),
+        "quantile": quantile,
     }
 
     for name, value in zip([f"true_{n}" for n in param_names], params_all[i]):
         result[name] = value.item()
 
-    for name, value in zip([f"post_{n}" for n in param_names], accepted_params.mean(dim=0)):
+    for name, value in zip([f"post_{n}" for n in param_names], adjusted_mean):
         result[name] = value.item()
 
     return result
@@ -254,7 +276,6 @@ def plot_errors(df: pd.DataFrame, param_names: list[str]) -> None:
 
 # TODO: check if the StandardScaler scaling used for train_split.X is correct
 # here
-# NOTE: vary epsilon; regression
 def main() -> None:
     # Load precomputed summary stats and parameters
     splits_path = Path("data/splits/scarce_0.00")
@@ -262,7 +283,7 @@ def main() -> None:
 
     # Randomly select a sample of pseudo-observations to condition on
     rng = np.random.default_rng(seed=42)
-    indices = rng.choice(len(train_split.X), size=10, replace=False)
+    indices = rng.choice(len(train_split.X), size=1000, replace=False)
 
     # Get parameter colum names
     param_names = (
@@ -270,16 +291,12 @@ def main() -> None:
         [f"{i}" for i in range(train_split.output_dim)]
     )
 
-    # Epsilon value
-    epsilon = 1.5
-
     # Use partial to fix all shared arguments
     abc_task = partial(
         run_abc_for_index,
         obs_all=train_split.X,
         params_all=train_split.y,
         param_names=param_names,
-        epsilon=epsilon,
     )
 
     with ProcessPoolExecutor() as executor:
