@@ -4,6 +4,8 @@ import torch
 from typing import Callable, Dict, Tuple
 from pathlib import Path
 from dataproc.nosoi_split import NosoiSplit
+import seaborn as sns
+import matplotlib.pyplot as plt
 from functools import partial
 from concurrent.futures import ProcessPoolExecutor
 
@@ -151,6 +153,65 @@ def run_abc_for_index(
     return result
 
 
+def compute_mae(df: pd.DataFrame, param_names: list[str]) -> pd.Series:
+    """
+    Compute the mean absolute error (MAE) between true and posterior estimates.
+
+    This function compares the posterior means obtained via ABC with the true
+    parameter values for each pseudo-observation and returns the MAE per
+    parameter.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing columns for both true and posterior parameter
+        values. Column names must follow the pattern 'true_<param>' and
+        'post_<param>'.
+    param_names : list[str]
+        List of parameter names (without 'true_' or 'post_' prefix) to
+        evaluate.
+
+    Returns
+    -------
+    pd.Series
+        Series containing the MAE for each parameter, indexed by
+        'post_<param>'.
+    """
+    post = df[[f"post_{n}" for n in param_names]]
+    true = df[[f"true_{n}" for n in param_names]].values
+    errors = post - true
+    return errors.abs().mean()
+
+
+def plot_errors(df: pd.DataFrame, param_names: list[str]) -> None:
+    """
+    Plot the distribution of prediction errors for each parameter.
+
+    This function generates and saves a histogram (with KDE) of the difference
+    between posterior and true parameter values for each specified parameter.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing columns for both true and posterior parameter
+        values. Column names must follow the pattern 'true_<param>' and
+        'post_<param>'.
+    param_names : list[str]
+        List of parameter names (without 'true_' or 'post_' prefix) to plot.
+    """
+    for param in param_names:
+        true_col = f"true_{param}"
+        post_col = f"post_{param}"
+
+        plt.figure()
+        sns.histplot(df[post_col] - df[true_col], kde=True)
+        plt.title(f'Error distribution for {post_col}')
+        plt.xlabel('Prediction error')
+        plt.ylabel('Count')
+        plt.axvline(0, color='red', linestyle='--')
+        plt.savefig(f"{post_col}.png", dpi=300, format="png")
+
+
 # TODO: check if the StandardScaler scaling used for train_split.X is correct
 # here
 # NOTE: vary epsilon; regression
@@ -183,6 +244,10 @@ def main() -> None:
 
     df = pd.DataFrame([r for r in results if r is not None])
     print(df)
+
+    mae = compute_mae(df, param_names)
+    plot_errors(df, param_names)
+    print(mae)
 
 
 if __name__ == "__main__":
