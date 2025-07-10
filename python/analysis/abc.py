@@ -245,10 +245,10 @@ def plot_errors(df: pd.DataFrame, param_names: list[str]) -> None:
 
         plt.figure()
         sns.histplot((df[post_col] - df[true_col]).to_list(), kde=True)
-        plt.title(f'Error distribution for {post_col}')
-        plt.xlabel('Prediction error')
-        plt.ylabel('Count')
-        plt.axvline(0, color='red', linestyle='--')
+        plt.title(f"{param}")
+        plt.xlabel("Prediction error")
+        plt.ylabel("Count")
+        plt.axvline(0, color="red", linestyle="--")
         plt.savefig(f"{post_col}.png", dpi=300, format="png")
 
 
