@@ -1,3 +1,41 @@
+
+"""
+Approximate Bayesian Computation (ABC) Inference for nosoi Simulations
+
+This module provides tools to perform Approximate Bayesian Computation (ABC)
+using rejection sampling to estimate nosoi simulation parameters from summary
+statistics extracted from transmission chains.
+
+The workflow includes:
+- Sampling parameter values from prior distributions
+- Computing distances between observed and simulated statistics
+- Performing ABC rejection to infer posterior parameter estimates
+- Aggregating results and evaluating prediction errors
+- Plotting error distributions
+
+Functions in this module support parallel execution and assume summary
+statistics and parameter data are stored in `NosoiSplit` format.
+
+Dependencies
+------------
+- matplotlib
+- numpy
+- pandas
+- seaborn
+- sklearn
+
+Examples
+--------
+Run the script directly to perform ABC on a subset of data and generate plots:
+
+    $ python abc_inference.py
+
+See Also
+--------
+NosoiSplit : Class for loading and managing simulation splits
+
+"""
+
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from pathlib import Path
