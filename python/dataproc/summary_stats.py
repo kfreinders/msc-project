@@ -6,7 +6,6 @@ import pandas as pd
 import networkx as nx
 
 from .simulation_loader import NosoiSimulation
-from utils.logging_config import setup_logging
 
 
 def get_logger():
@@ -465,8 +464,6 @@ def compute_death_statistics(simulation: NosoiSimulation):
 # Main function
 # ------------------------------------------------------------------------------
 
-# TODO: permuation tests
-# TODO: SHAP values
 def compute_summary_statistics(
     simulation: NosoiSimulation
 ) -> pd.DataFrame:
