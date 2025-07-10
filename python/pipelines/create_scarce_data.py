@@ -1,3 +1,5 @@
+import csv
+import hashlib
 import numpy as np
 from pathlib import Path
 import logging
@@ -12,6 +14,23 @@ from utils.logging_config import setup_logging
 
 def get_logger():
     return logging.getLogger(__name__)
+
+
+def deterministic_seed(*args) -> int:
+    """
+    Generate a deterministic 32-bit seed from input arguments.
+
+    This function concatenates all input arguments as an UTF-8 string from
+    which to generate an sha256 hash.
+
+    Returns
+    -------
+    int
+        Deterministic 32-bit seed based on the input arguments
+    """
+    joined = '|'.join(map(str, args)).encode('utf-8')
+    digest = hashlib.sha256(joined).digest()
+    return int.from_bytes(digest[:4], 'big') % 2**32
 
 
 def apply_single_level(
@@ -39,7 +58,7 @@ def apply_single_level(
         The fraction of data to drop, used in output filename.
     output_dir : Path
         Directory to save the output CSV file.
-    min_hosts : in
+    min_hosts : int
         Only include transmission chains with at least this minimum number of
         hosts.
     """
@@ -61,23 +80,33 @@ def apply_single_level(
                 )
                 continue
 
-            seed = extract_seed(file)
+            sim_seed = extract_seed(file)
             sim = NosoiSimulation.from_parquet(file)
 
+            # Create a unique 32-bit seed for reproducable data degradation
+            deg_seed = deterministic_seed(sim_seed, level)
+            logger.debug(
+                f"Degradation seed {deg_seed} generated from "
+                f"sim_seed={sim_seed}, level={level} "
+                f"for file {file.name}",
+            )
+
             # Apply degradation & recompute summary statistics
-            sim.graph = strategy.apply(sim.graph)
+            sim.graph = strategy.apply(sim.graph, seed=deg_seed)
+
+            # Re-compute summary statistics
             stats_df = compute_summary_statistics(sim)
 
             if stats_df.empty:
                 logger.warning("No stats for %s, skipping.", file.name)
                 continue
 
-            stats_df.insert(0, "seed", seed)
+            stats_df.insert(0, "seed", sim_seed)
             stats_df.to_csv(
                 output_path, mode="a", header=first_write, index=False
             )
             first_write = False  # Only write header on first iteration
-            logger.debug("Appended stats for seed %010d", seed)
+            logger.debug("Appended stats for seed %010d", sim_seed)
 
         except Exception as e:
             logger.error(
@@ -91,7 +120,11 @@ def _apply_level(args):
     apply_single_level(path, strategy, level, output_dir)
 
 
-def apply_all_levels(path: Path, levels: np.ndarray, output_dir: Path) -> None:
+def apply_all_levels(
+    path: Path,
+    levels: np.ndarray,
+    output_dir: Path,
+) -> None:
     """
     Apply multiple levels of data scarcity to all simulation files.
 
@@ -101,6 +134,8 @@ def apply_all_levels(path: Path, levels: np.ndarray, output_dir: Path) -> None:
         Path to the directory containing simulation .parquet files.
     levels : ArrayLike or Sequence[float]
         The drop percentages to apply (e.g., [0.0, 0.1, 0.2, ...]).
+    output_dir : Path
+        Path to output scare summary statistic datasets to.
     """
     logger = get_logger()
     logger.info(f"Starting processing with levels: {levels}")
