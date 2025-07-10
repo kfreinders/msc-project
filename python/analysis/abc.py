@@ -1,13 +1,15 @@
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
+from pathlib import Path
+from typing import Callable, Dict, Tuple
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import torch
-from typing import Callable, Dict, Tuple
-from pathlib import Path
-from dataproc.nosoi_split import NosoiSplit
 import seaborn as sns
-import matplotlib.pyplot as plt
-from functools import partial
-from concurrent.futures import ProcessPoolExecutor
+import torch
+
+from dataproc.nosoi_split import NosoiSplit
 
 
 def sample_parameters(
@@ -204,7 +206,7 @@ def plot_errors(df: pd.DataFrame, param_names: list[str]) -> None:
         post_col = f"post_{param}"
 
         plt.figure()
-        sns.histplot(df[post_col] - df[true_col], kde=True)
+        sns.histplot((df[post_col] - df[true_col]).to_list(), kde=True)
         plt.title(f'Error distribution for {post_col}')
         plt.xlabel('Prediction error')
         plt.ylabel('Count')
@@ -225,7 +227,10 @@ def main() -> None:
     indices = rng.choice(len(train_split.X), size=10, replace=False)
 
     # Get parameter colum names
-    param_names = train_split.y_colnames or [f"{i}" for i in range(train_split.output_dim)]
+    param_names = (
+        train_split.y_colnames or
+        [f"{i}" for i in range(train_split.output_dim)]
+    )
 
     # Epsilon value
     epsilon = 1.5
