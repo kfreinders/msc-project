@@ -97,6 +97,32 @@ def euclidean_distance(obs: torch.Tensor, sim: torch.Tensor) -> float:
     return float(torch.norm(obs - sim))
 
 
+def epanechnikov_kernel(distances: np.ndarray, delta: float) -> np.ndarray:
+    """
+    Compute Epanechnikov kernel weights for a set of distances.
+
+    Parameters
+    ----------
+    distances : np.ndarray
+        1D array of distances between observed and simulated summary
+        statistics.
+    delta : float
+        Bandwidth (maximum distance in accepted subset).
+
+    Returns
+    -------
+    np.ndarray
+        Kernel weights of the same shape as `distances`.
+    """
+    scaled = distances / delta
+    weights = np.where(
+        distances <= delta,
+        (1 - scaled**2),
+        0.0
+    )
+    return weights
+
+
 def abc_regression_adjustment(
     obs_stats: torch.Tensor,
     sim_stats: torch.Tensor,
@@ -125,25 +151,35 @@ def abc_regression_adjustment(
     torch.Tensor
         Posterior mean estimate after regression adjustment.
     """
-    # Step 1: Compute distances
+    # Step 1: compute distances
     distances = torch.tensor(
         [distance_fn(obs_stats, sim) for sim in sim_stats]
     )
     k = max(1, int(len(distances) * quantile))
     closest_indices = torch.topk(distances, k=k, largest=False).indices
 
-    X = sim_stats[closest_indices]
-    y = sim_params[closest_indices]
+    X = sim_stats[closest_indices]        # (k, d)
+    y = sim_params[closest_indices]       # (k, p)
+    dists = distances[closest_indices]    # (k,)
 
-    # Center summary statistics around the observation
+    # Step 2: center summary statistics around the observation
     X_centered = X - obs_stats
 
-    # Step 2–3: Regression-adjusted ABC for each parameter
+    # Step 3: Compute Epanechnikov kernel weights
+    delta = dists.max().item()
+    weights = epanechnikov_kernel(dists.numpy(), delta=delta)  # shape (k,)
+
+    # Step 4: Local-linear regression for each parameter
     adjusted_params = []
 
     for i in range(y.shape[1]):
         reg = LinearRegression()
-        reg.fit(X_centered.numpy(), y[:, i].numpy())
+        reg.fit(
+            X_centered.numpy(),
+            y[:, i].numpy(),
+            sample_weight=weights
+        )
+        # Predict at X = 0 (i.e., s = s_obs)
         y_pred = reg.predict(X_centered.numpy())
 
         # Adjustment
