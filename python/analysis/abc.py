@@ -38,6 +38,8 @@ NosoiSplit : Class for loading and managing simulation splits
 
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
+import logging
+from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Callable, Dict
 
@@ -48,6 +50,7 @@ import seaborn as sns
 from sklearn.linear_model import LinearRegression
 import torch
 
+from utils.logging_config import setup_logging
 from dataproc.nosoi_split import NosoiSplit
 
 
@@ -223,6 +226,9 @@ def run_abc_for_index(
     dict | None
         Dictionary with results for this observation, or None if no acceptance.
     """
+    # Set up logger
+    logger = logging.getLogger(__name__)
+
     obs_stats = obs_all[i]
 
     try:
@@ -234,7 +240,7 @@ def run_abc_for_index(
             quantile=quantile
         )
     except Exception as e:
-        print(f"ABC failed for idx={i}: {e}")
+        logger.error(f"ABC failed for idx={i}: {e}")
         return None
 
     result = {
@@ -297,6 +303,8 @@ def plot_errors(df: pd.DataFrame, param_names: list[str]) -> None:
     param_names : list[str]
         List of parameter names (without 'true_' or 'post_' prefix) to plot.
     """
+    logger = logging.getLogger(__name__)
+
     for param in param_names:
         true_col = f"true_{param}"
         post_col = f"post_{param}"
@@ -309,23 +317,42 @@ def plot_errors(df: pd.DataFrame, param_names: list[str]) -> None:
         plt.axvline(0, color="red", linestyle="--")
         plt.savefig(f"{post_col}.png", dpi=300, format="png")
 
+        logger.info(
+            f"Saved prediction error distribution plot for {param} "
+            f"to ./{post_col}.png"
+        )
+
 
 # TODO: check if the StandardScaler scaling used for train_split.X is correct
 # here
 def main() -> None:
+    logger = logging.getLogger(__name__)
+    setup_logging(run_name="abc")
+
     # Load precomputed summary stats and parameters
+    logger.info("Loading data splits...")
     splits_path = Path("data/splits/scarce_0.00")
     train_split = NosoiSplit.load("train", splits_path)
 
     # Randomly select a sample of pseudo-observations to condition on
-    rng = np.random.default_rng(seed=42)
-    indices = rng.choice(len(train_split.X), size=1000, replace=False)
+    seed = 42
+    n_runs = 1000
+    rng = np.random.default_rng(seed=seed)
+    indices = rng.choice(len(train_split.X), size=n_runs, replace=False)
+
+    logger.info(
+        f"Randomly selecting {n_runs} from training dataset"
+    )
+    if seed:
+        logger.info(f"seed={seed}")
 
     # Get parameter colum names
     param_names = (
         train_split.y_colnames or
         [f"{i}" for i in range(train_split.output_dim)]
     )
+
+    logger.info(f"Parameters to infer: {param_names}")
 
     # Use partial to fix all shared arguments
     abc_task = partial(
@@ -335,15 +362,19 @@ def main() -> None:
         param_names=param_names,
     )
 
-    with ProcessPoolExecutor() as executor:
+    n_cores = cpu_count()
+    logger.info(
+        f"Running ABC processes on {n_cores} cores, this may take a while..."
+    )
+
+    with ProcessPoolExecutor(max_workers=n_cores) as executor:
         results = list(executor.map(abc_task, indices))
 
     df = pd.DataFrame([r for r in results if r is not None])
-    print(df)
 
     mae = compute_mae(df, param_names)
     plot_errors(df, param_names)
-    print(mae)
+    logging.info(mae.to_dict())
 
 
 if __name__ == "__main__":
