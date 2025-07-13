@@ -1,4 +1,3 @@
-import csv
 import hashlib
 from typing import Optional
 import numpy as np
@@ -35,9 +34,11 @@ def deterministic_seed(*args) -> int:
     return int.from_bytes(digest[:4], 'big') % 2**32
 
 
-def get_seeds(csv_file: Path):
+def get_seeds(
+    csv_file: Path
+) -> tuple[Optional[list[int]], Optional[list[str]]]:
     if csv_file.is_file() and (df := pd.read_csv(csv_file)) is not None:
-        seeds = df["seed"].tolist
+        seeds = df["seed"].tolist()
         headers = df.columns.values.tolist()
         return seeds, headers
     return None, None
