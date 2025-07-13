@@ -1,7 +1,9 @@
 import csv
 import hashlib
+from typing import Optional
 import numpy as np
 from pathlib import Path
+import pandas as pd
 import logging
 from multiprocessing import Pool
 
@@ -31,6 +33,14 @@ def deterministic_seed(*args) -> int:
     joined = '|'.join(map(str, args)).encode('utf-8')
     digest = hashlib.sha256(joined).digest()
     return int.from_bytes(digest[:4], 'big') % 2**32
+
+
+def get_seeds(csv_file: Path):
+    if csv_file.is_file() and (df := pd.read_csv(csv_file)) is not None:
+        seeds = df["seed"].tolist
+        headers = df.columns.values.tolist()
+        return seeds, headers
+    return None, None
 
 
 def apply_single_level(
@@ -67,8 +77,10 @@ def apply_single_level(
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"scarce_{level:.2f}.csv"
 
+    seeds, headers = get_seeds(output_path)
+
     # Track whether to write the header
-    first_write = True
+    first_write = True if not headers else False
 
     for file in find_parquet_files(root_dir):
         try:
@@ -81,6 +93,13 @@ def apply_single_level(
                 continue
 
             sim_seed = extract_seed(file)
+
+            if seeds and sim_seed in seeds:
+                logger.info(
+                    f"Skipping already finished file: {file.name}"
+                )
+                continue
+
             sim = NosoiSimulation.from_parquet(file)
 
             # Create a unique 32-bit seed for reproducable data degradation
