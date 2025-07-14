@@ -287,7 +287,11 @@ def compute_mae(df: pd.DataFrame, param_names: list[str]) -> pd.Series:
     return errors.abs().mean()
 
 
-def plot_errors(df: pd.DataFrame, param_names: list[str]) -> None:
+def plot_errors(
+    df: pd.DataFrame,
+    param_names: list[str],
+    output_path: Path
+) -> None:
     """
     Plot the distribution of prediction errors for each parameter.
 
@@ -308,6 +312,7 @@ def plot_errors(df: pd.DataFrame, param_names: list[str]) -> None:
     for param in param_names:
         true_col = f"true_{param}"
         post_col = f"post_{param}"
+        plotpath = output_path / f"{post_col}.png"
 
         plt.figure()
         sns.histplot((df[post_col] - df[true_col]).to_list(), kde=True)
@@ -315,11 +320,11 @@ def plot_errors(df: pd.DataFrame, param_names: list[str]) -> None:
         plt.xlabel("Prediction error")
         plt.ylabel("Count")
         plt.axvline(0, color="red", linestyle="--")
-        plt.savefig(f"{post_col}.png", dpi=300, format="png")
+        plt.savefig(plotpath, dpi=300, format="png")
 
         logger.info(
             f"Saved prediction error distribution plot for {param} "
-            f"to ./{post_col}.png"
+            f"to {plotpath}"
         )
 
 
@@ -373,7 +378,7 @@ def main() -> None:
     df = pd.DataFrame([r for r in results if r is not None])
 
     mae = compute_mae(df, param_names)
-    plot_errors(df, param_names)
+    plot_errors(df, param_names, Path("./figures"))
     logging.info(mae.to_dict())
 
 
