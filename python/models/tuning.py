@@ -294,7 +294,8 @@ def optuna_study(
 
     # Only run the study if it hasn't yet concluded
     if (
-        len(study.trials) < n_trials and
+        len(study.trials) == 0 or
+        len(study.trials) < n_trials and  # quota trials not yet reached
         not all(t.state.is_finished() for t in study.trials)
     ):
         study.optimize(
