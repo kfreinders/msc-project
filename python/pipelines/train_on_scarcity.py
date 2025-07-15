@@ -186,6 +186,10 @@ def main() -> None:
         )
 
         # Retrain model
+        logger.info(
+            "Now training model with best hyperparameters. "
+            "This may take a while..."
+        )
         trained_model, _ = train_single_config(
             best_cfg,
             model_factory,
@@ -203,6 +207,7 @@ def main() -> None:
             save_torch_with_versioning(
                 trained_model, model_path
             )
+            logger.info(f"Saved model to {model_path}")
 
         # Make the test set dataloader
         test_loader = test_split.make_dataloader(best_cfg.batch_size)
