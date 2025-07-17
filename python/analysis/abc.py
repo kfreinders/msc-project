@@ -328,7 +328,7 @@ def plot_errors(
         )
 
 
-# TODO: check if the StandardScaler scaling used for train_split.X is correct
+# TODO: check if the StandardScaler scaling used for test_split.X is correct
 # here
 def main() -> None:
     logger = logging.getLogger(__name__)
@@ -337,24 +337,24 @@ def main() -> None:
     # Load precomputed summary stats and parameters
     logger.info("Loading data splits...")
     splits_path = Path("data/splits/scarce_0.00")
-    train_split = NosoiSplit.load("train", splits_path)
+    test_split = NosoiSplit.load("test", splits_path)
 
     # Randomly select a sample of pseudo-observations to condition on
     seed = 42
-    n_runs = 1000
+    n_runs = 10_000
     rng = np.random.default_rng(seed=seed)
-    indices = rng.choice(len(train_split.X), size=n_runs, replace=False)
+    indices = rng.choice(len(test_split.X), size=n_runs, replace=False)
 
     logger.info(
-        f"Randomly selecting {n_runs} from training dataset"
+        f"Randomly selecting {n_runs} samples from test dataset"
     )
     if seed:
         logger.info(f"seed={seed}")
 
     # Get parameter colum names
     param_names = (
-        train_split.y_colnames or
-        [f"{i}" for i in range(train_split.output_dim)]
+        test_split.y_colnames or
+        [f"{i}" for i in range(test_split.output_dim)]
     )
 
     logger.info(f"Parameters to infer: {param_names}")
@@ -362,8 +362,8 @@ def main() -> None:
     # Use partial to fix all shared arguments
     abc_task = partial(
         run_abc_for_index,
-        obs_all=train_split.X,
-        params_all=train_split.y,
+        obs_all=test_split.X,
+        params_all=test_split.y,
         param_names=param_names,
     )
 
