@@ -1,5 +1,6 @@
 import hashlib
 from typing import Optional
+import math
 import numpy as np
 from pathlib import Path
 import pandas as pd
@@ -49,7 +50,8 @@ def apply_single_level(
     strategy: DataScarcityStrategy,
     level: float,
     output_dir: Path,
-    min_hosts: int = 2_000
+    min_hosts: float,
+    max_hosts: float
 ) -> None:
     """
     Apply a single data scarcity strategy to all .parquet files in a directory.
@@ -69,8 +71,11 @@ def apply_single_level(
         The fraction of data to drop, used in output filename.
     output_dir : Path
         Directory to save the output CSV file.
-    min_hosts : int
+    min_hosts : float
         Only include transmission chains with at least this minimum number of
+        hosts.
+    min_hosts : float
+        Only include transmission chains with at most this maximum number of
         hosts.
     """
     logger = get_logger()
@@ -85,11 +90,18 @@ def apply_single_level(
 
     for file in find_parquet_files(root_dir):
         try:
-            # Skip simulations with too few hosts
+            # Skip simulations with too few or too many hosts
             host_count = peek_host_count(file)
-            if host_count < min_hosts:
+            if min_hosts and host_count < min_hosts:
                 logger.info(
-                    f"Skipping {file.name} ({host_count} < {min_hosts})."
+                    f"Level {level}: "
+                    f"skipping {file.name} ({host_count} < {min_hosts})."
+                )
+                continue
+            if max_hosts and host_count > max_hosts:
+                logger.info(
+                    f"Level {level}: "
+                    f"skipping {file.name} ({host_count} > {min_hosts})."
                 )
                 continue
 
@@ -135,15 +147,17 @@ def apply_single_level(
 
 
 def _apply_level(args):
-    path, level, output_dir = args
+    path, level, output_dir, min_hosts, max_hosts = args
     strategy = RandomNodeDrop(level)
-    apply_single_level(path, strategy, level, output_dir)
+    apply_single_level(path, strategy, level, output_dir, min_hosts, max_hosts)
 
 
 def apply_all_levels(
     path: Path,
     levels: np.ndarray,
     output_dir: Path,
+    min_hosts: float,
+    max_hosts: float
 ) -> None:
     """
     Apply multiple levels of data scarcity to all simulation files.
@@ -160,7 +174,7 @@ def apply_all_levels(
     logger = get_logger()
     logger.info(f"Starting processing with levels: {levels}")
     with Pool() as pool:
-        args = [(path, level, output_dir) for level in levels]
+        args = [(path, level, output_dir, min_hosts, max_hosts) for level in levels]
         pool.map(_apply_level, args)
     logger.info("Finished applying all scarcity levels.")
 
@@ -173,12 +187,14 @@ def main() -> None:
     input_path = Path("data/nosoi")
     output_path = Path("data/scarce_stats")
     levels = np.linspace(0.00, 0.5, num=11)
+    min_hosts = 2000
+    max_hosts = math.inf
 
     logger.info(f"Input path to Parquet files: {input_path}")
     logger.info(f"Output path: {output_path}")
     logger.info(f"Scarcity levels: {levels}")
 
-    apply_all_levels(input_path, levels, output_path)
+    apply_all_levels(input_path, levels, output_path, min_hosts, max_hosts)
     logger.info("Main pipeline completed")
 
 
