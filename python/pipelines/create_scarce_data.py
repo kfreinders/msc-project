@@ -74,7 +74,7 @@ def apply_single_level(
     min_hosts : float
         Only include transmission chains with at least this minimum number of
         hosts.
-    min_hosts : float
+    max_hosts : float
         Only include transmission chains with at most this maximum number of
         hosts.
     """
@@ -101,7 +101,7 @@ def apply_single_level(
             if max_hosts and host_count > max_hosts:
                 logger.info(
                     f"Level {level}: "
-                    f"skipping {file.name} ({host_count} > {min_hosts})."
+                    f"skipping {file.name} ({host_count} > {max_hosts})."
                 )
                 continue
 
