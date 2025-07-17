@@ -50,10 +50,10 @@ class NosoiSplit:
     y: torch.Tensor
     x_raw: np.ndarray
     y_raw: np.ndarray
-    x_raw_colnames: Optional[list[str]] = None
-    y_raw_colnames: Optional[list[str]] = None
-    x_colnames: Optional[list[str]] = None
-    y_colnames: Optional[list[str]] = None
+    x_raw_colnames: list[str]
+    y_raw_colnames: list[str]
+    x_colnames: list[str]
+    y_colnames: list[str]
 
     @property
     def input_dim(self) -> int:
