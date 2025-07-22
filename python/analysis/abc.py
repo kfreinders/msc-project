@@ -36,8 +36,10 @@ NosoiSplit : Class for loading and managing simulation splits
 
 """
 
+import argparse
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
+import json
 import logging
 from multiprocessing import cpu_count
 from pathlib import Path
@@ -328,25 +330,59 @@ def plot_errors(
         )
 
 
-# TODO: check if the StandardScaler scaling used for test_split.X is correct
-# here
-def main() -> None:
+def run_abc(
+    splits_path: Path,
+    n_runs: int,
+    quantile: float,
+    output_path: Path,
+    n_jobs: int,
+    seed: int,
+    make_plots: bool
+) -> None:
+    """
+    Infer posterior nosoi parameter distributions with ABC.
+
+    This function loads a test split of simulated data, randomly selects a
+    subset of pseudo-observations, and performs ABC with local linear
+    regression adjustment to estimate posterior means. Results are saved to
+    disk, and optional prediction error plots can be generated.
+
+    Parameters
+    ----------
+    splits_path
+        Path to the directory containing the pickled `NosoiSplit` test split.
+    n_runs
+        Number of pseudo-observations to sample and infer from.
+    quantile
+        Proportion of closest simulations to retain for ABC adjustment
+        (e.g. 0.01).
+    output_path
+        Path to save the resulting CSV file of posterior estimates and plots.
+    n_jobs
+        Number of parallel jobs to run for ABC inference.
+    seed
+        Random seed for reproducibility of sampling.
+    make_plots
+        Whether to generate and save prediction error plots per parameter.
+
+    Raises
+    ------
+    RuntimeError:
+        If `n_jobs` exceeds the number of CPU cores.
+    """
     logger = logging.getLogger(__name__)
     setup_logging(run_name="abc")
 
     # Load precomputed summary stats and parameters
-    logger.info("Loading data splits...")
-    splits_path = Path("data/splits/scarce_0.00")
+    logger.info(f"Loading data splits from {splits_path}")
     test_split = NosoiSplit.load("test", splits_path)
 
     # Randomly select a sample of pseudo-observations to condition on
-    seed = 42
-    n_runs = 10_000
     rng = np.random.default_rng(seed=seed)
     indices = rng.choice(len(test_split.X), size=n_runs, replace=False)
 
     logger.info(
-        f"Randomly selecting {n_runs} samples from test dataset"
+        f"Randomly selecting {n_runs:_} samples from test dataset"
     )
     if seed:
         logger.info(f"seed={seed}")
@@ -356,7 +392,6 @@ def main() -> None:
         test_split.y_colnames or
         [f"{i}" for i in range(test_split.output_dim)]
     )
-
     logger.info(f"Parameters to infer: {param_names}")
 
     # Use partial to fix all shared arguments
@@ -365,11 +400,15 @@ def main() -> None:
         obs_all=test_split.X,
         params_all=test_split.y,
         param_names=param_names,
+        quantile=quantile
     )
 
-    n_cores = cpu_count()
+    if n_jobs > (n_cores := cpu_count()):
+        raise RuntimeError(
+            f"Too many jobs submitted: {n_jobs} > available CPU cores: {n_cores}"
+        )
     logger.info(
-        f"Running ABC processes on {n_cores} cores, this may take a while..."
+        f"Starting jobs on {n_cores} cores. This may take a while..."
     )
 
     with ProcessPoolExecutor(max_workers=n_cores) as executor:
@@ -377,10 +416,71 @@ def main() -> None:
 
     df = pd.DataFrame([r for r in results if r is not None])
 
-    mae = compute_mae(df, param_names)
-    plot_errors(df, param_names, Path("./figures"))
-    logging.info(mae.to_dict())
+    if not output_path.exists():
+        logger.info(f"Making directory: {output_path}")
+        output_path.mkdir(parents=True, exist_ok=True)
+
+    df.to_csv(output_path / "abc_data.csv")
+    logger.info(f"Saved all ABC data to {output_path / 'abc_data.csv'}")
+
+    logger.info("Computing MAE per parameter...")
+    mae = compute_mae(df, param_names).to_dict()
+    logging.info(mae)
+
+    with open(output_path / "abc_mae.json", 'w') as handle:
+        json.dump(mae, handle)
+    logger.info(f"Saved MAE values to {output_path / 'abc_mae.json'}")
+
+    if make_plots:
+        plot_errors(df, param_names, output_path)
+        logger.info(f"Exported plots to: {output_path}")
+
+
+def cli_main():
+    parser = argparse.ArgumentParser(
+        description=("Infer posterior nosoi parameter distributions with ABC.")
+    )
+
+    parser.add_argument(
+        "--splits-path", type=str, default="data/splits/scarce_0.00",
+        help="Path to the directory containing pickled NosoiSplit object."
+    )
+    parser.add_argument(
+        "--n-runs", type=int, default=10_000,
+        help="Number of pseudo-observations to sample."
+    )
+    parser.add_argument(
+        "--quantile", type=float, default=0.01,
+        help="Proportion of simulations to retain in ABC rejection step."
+    )
+    parser.add_argument(
+        "--output-path", type=str, default="data/benchmarks",
+        help="Directory to save output data."
+    )
+    parser.add_argument(
+        "--n-jobs", type=int, default=cpu_count(),
+        help="Number of parallel jobs to run (default: number of CPU cores)."
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42,
+        help="Random seed for reproducibility."
+    )
+    parser.add_argument(
+        "--make_plots", type=bool, default=False,
+        help="Make and export prediction error distribution plots."
+    )
+
+    args = parser.parse_args()
+    run_abc(
+        splits_path=Path(args.splits_path),
+        n_runs=args.n_runs,
+        quantile=args.quantile,
+        output_path=Path(args.output_path),
+        n_jobs=args.n_jobs,
+        seed=args.seed,
+        make_plots=args.make_plots
+    )
 
 
 if __name__ == "__main__":
-    main()
+    cli_main()
