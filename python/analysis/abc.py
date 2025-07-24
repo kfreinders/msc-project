@@ -349,20 +349,20 @@ def run_abc(
 
     Parameters
     ----------
-    splits_path
+    splits_path : Path
         Path to the directory containing the pickled `NosoiSplit` test split.
-    n_runs
+    n_runs : int
         Number of pseudo-observations to sample and infer from.
-    quantile
+    quantile : float
         Proportion of closest simulations to retain for ABC adjustment
         (e.g. 0.01).
-    output_path
+    output_path : Path
         Path to save the resulting CSV file of posterior estimates and plots.
-    n_jobs
+    n_jobs : int
         Number of parallel jobs to run for ABC inference.
-    seed
+    seed : int
         Random seed for reproducibility of sampling.
-    make_plots
+    make_plots : bool
         Whether to generate and save prediction error plots per parameter.
 
     Raises
