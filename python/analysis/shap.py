@@ -1,4 +1,6 @@
+import argparse
 import logging
+import json
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
@@ -195,7 +197,12 @@ def combine_shap_images(image_paths, out_path, rows=3, cols=2) -> None:
     print(f"Saved combined SHAP figure to {out_path}")
 
 
-def main() -> None:
+def run_shap(
+    splits_path: Path,
+    model_path: Path,
+    n_samples: int,
+    output_path: Path
+) -> None:
     # Set up logger
     setup_logging("training")
     logger = logging.getLogger(__name__)
@@ -205,40 +212,83 @@ def main() -> None:
     logger.info(f"Using device: {device}")
 
     # Load data splits from disk
-    splits_path = Path("data/splits/scarce_0.00")
-    train_split = NosoiSplit.load("train", splits_path)
     test_split = NosoiSplit.load("test", splits_path)
     logger.info(f"Loaded saved data splits from {splits_path}")
 
-    cfg = HyperParams(
-        learning_rate=0.0005186374528320235,
-        hidden_size=256,
-        num_layers=2,
-        dropout_rate=0.10448580769582116,
-        batch_size=16
+    # Retrieve hyperparameters
+    with open(model_path / "best_config.json") as handle:
+        data = json.load(handle)
+        cfg = HyperParams.from_dict(data)
+
+    logger.info(
+        f"Loaded saved hyperparameters from {model_path / 'best_config.json'}"
     )
-    logger.info(f"HyperParams: {cfg}")
 
     model = model_factory(
-        train_split.input_dim,
-        train_split.output_dim,
+        test_split.input_dim,
+        test_split.output_dim,
         cfg,
         device
     )
 
-    # Load model (redundant in case since already in memory)
-    model_path = Path("data/dnn/scarce_0.00/regressor.pt")
-    logger.info(f"Loading saved model from: {model_path}")
+    # Load model
     model.load_state_dict(
-        torch.load(model_path, map_location=device)
+        torch.load(model_path / "regressor.pt", map_location=device)
     )
     model.to(device)
+    logger.info(f"Loaded saved DNN from: {model_path / 'regressor.pt'}")
+
+    if not output_path.exists():
+        output_path.mkdir(parents=True, exist_ok=True)
 
     logger.info("Computing SHAP values...")
-    png_files = make_shap_plots(model, test_split, device)
-    combine_shap_images(png_files, out_path="shap_summary_combined.png")
+    png_files = make_shap_plots(
+        model,
+        test_split,
+        device,
+        n_samples,
+        output_dir=output_path
+    )
+    combine_shap_images(
+        png_files,
+        out_path=output_path / "shap_summary_combined.png"
+    )
     logger.info("SHAP summary saved as shap_summary.png")
 
 
+def cli_main():
+    parser = argparse.ArgumentParser(
+        description=("")
+    )
+
+    parser.add_argument(
+        "--splits-path", type=str, default="data/splits/scarce_0.00",
+        help="Path to the directory containing pickled NosoiSplit object."
+    )
+    parser.add_argument(
+        "--model-path", type=str, default="data/dnn/scarce_0.00",
+        help=(
+            "Path to the directory containing the pickled DNN (regressor.pt) "
+            "and hyperparameter configuration (best_config.json)"
+        )
+    )
+    parser.add_argument(
+        "--n-samples", type=int, default=5_000,
+        help="Number of samples to use."
+    )
+    parser.add_argument(
+        "--output-path", type=str, default="data/shap",
+        help="Directory to save output data."
+    )
+
+    args = parser.parse_args()
+    run_shap(
+        splits_path=Path(args.splits_path),
+        model_path=Path(args.model_path),
+        output_path=Path(args.output_path),
+        n_samples=args.n_samples,
+    )
+
+
 if __name__ == "__main__":
-    main()
+    cli_main()
