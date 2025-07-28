@@ -139,8 +139,9 @@ def apply_single_level(
             # Apply degradation & recompute summary statistics
             if not math.isclose(level, 0.0):
                 sim.graph = strategy.apply(sim.graph, seed=deg_seed)
-            else:
-                logger.info("No scarcity applied (level=0.0).")
+                logger.info(
+                    f"Level {level}: no scarcity applied to {file.name}"
+                )
 
             # Re-compute summary statistics
             stats_df = compute_summary_statistics(sim)
