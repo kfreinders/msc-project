@@ -189,20 +189,34 @@ def cli_main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
-    parser.add_argument("--input", type=Path, default=Path("data/nosoi"),
-                        help="Path to directory with input .parquet simulations.")
-    parser.add_argument("--output", type=Path, default=Path("data/scarce_stats"),
-                        help="Directory to save degraded summary statistics.")
-    parser.add_argument("--min-hosts", type=int, default=2000,
-                        help="Minimum number of hosts required.")
-    parser.add_argument("--max-hosts", type=int, default=math.inf,
-                        help="Maximum number of hosts allowed.")
-    parser.add_argument("--levels-min", type=int, default=0.00,
-                        help="Lower bound level of scarcity to apply.")
-    parser.add_argument("--levels-max", type=int, default=0.5,
-                        help="Upper bound level of scarcity to apply.")
-    parser.add_argument("--levels-steps", type=int, default=11,
-                        help="Number of steps in the upper and lower bound.")
+    parser.add_argument(
+        "--input", type=Path, default=Path("data/nosoi"),
+        help="Path to directory with input .parquet simulations."
+    )
+    parser.add_argument(
+        "--output", type=Path, default=Path("data/scarce_stats"),
+        help="Directory to save degraded summary statistics."
+    )
+    parser.add_argument(
+        "--min-hosts", type=int, default=2000,
+        help="Minimum number of hosts required."
+    )
+    parser.add_argument(
+        "--max-hosts", type=int, default=math.inf,
+        help="Maximum number of hosts allowed."
+    )
+    parser.add_argument(
+        "--min-level", type=int, default=0.00,
+        help="Lower bound level of scarcity to apply (inclusive)."
+    )
+    parser.add_argument(
+        "--max-level", type=int, default=0.5,
+        help="Upper bound level of scarcity to apply (inclusive)."
+    )
+    parser.add_argument(
+        "--steps-level", type=int, default=11,
+        help="Number levels to use between the upper and lower bound."
+    )
 
     args = parser.parse_args()
 
