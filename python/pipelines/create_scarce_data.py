@@ -1,3 +1,4 @@
+import argparse
 import hashlib
 from typing import Optional
 import math
@@ -179,24 +180,47 @@ def apply_all_levels(
     logger.info("Finished applying all scarcity levels.")
 
 
-def main() -> None:
-    logger = get_logger()
+def cli_main():
+    parser = argparse.ArgumentParser(
+        description=(
+            """Apply a data scarcity strategy to nosoi simulations and compute
+            the new summary statistics."""
+        ),
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    parser.add_argument("--input", type=Path, default=Path("data/nosoi"),
+                        help="Path to directory with input .parquet simulations.")
+    parser.add_argument("--output", type=Path, default=Path("data/scarce_stats"),
+                        help="Directory to save degraded summary statistics.")
+    parser.add_argument("--min-hosts", type=int, default=2000,
+                        help="Minimum number of hosts required.")
+    parser.add_argument("--max-hosts", type=int, default=math.inf,
+                        help="Maximum number of hosts allowed.")
+    parser.add_argument("--levels-min", type=int, default=0.00,
+                        help="Lower bound level of scarcity to apply.")
+    parser.add_argument("--levels-max", type=int, default=0.5,
+                        help="Upper bound level of scarcity to apply.")
+    parser.add_argument("--levels-steps", type=int, default=11,
+                        help="Number of steps in the upper and lower bound.")
+
+    args = parser.parse_args()
+
     setup_logging(run_name="create_scarce_sst")
+    levels = np.linspace(
+        float(args.levels_min),
+        float(args.levels_max),
+        num=args.levels_steps
+    )
 
-    logger.info("Starting main pipeline")
-    input_path = Path("data/nosoi")
-    output_path = Path("data/scarce_stats")
-    levels = np.linspace(0.00, 0.5, num=11)
-    min_hosts = 2000
-    max_hosts = math.inf
-
-    logger.info(f"Input path to Parquet files: {input_path}")
-    logger.info(f"Output path: {output_path}")
-    logger.info(f"Scarcity levels: {levels}")
-
-    apply_all_levels(input_path, levels, output_path, min_hosts, max_hosts)
-    logger.info("Main pipeline completed")
+    apply_all_levels(
+        path=args.input,
+        levels=levels,
+        output_dir=args.output,
+        min_hosts=args.min_hosts,
+        max_hosts=args.max_hosts,
+    )
 
 
 if __name__ == "__main__":
-    main()
+    cli_main()
