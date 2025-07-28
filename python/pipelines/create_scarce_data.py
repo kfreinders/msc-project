@@ -52,7 +52,8 @@ def apply_single_level(
     level: float,
     output_dir: Path,
     min_hosts: float,
-    max_hosts: float
+    max_hosts: float,
+    truncate: int
 ) -> None:
     """
     Apply a single data scarcity strategy to all .parquet files in a directory.
@@ -78,6 +79,8 @@ def apply_single_level(
     max_hosts : float
         Only include transmission chains with at most this maximum number of
         hosts.
+    truncate: bool
+         If > 0, truncate oversized simulations to this number of hosts.
     """
     logger = get_logger()
     logger.info(f"Applying scarcity level {level:.2f} to files in {root_dir}")
@@ -91,7 +94,15 @@ def apply_single_level(
 
     for file in find_parquet_files(root_dir):
         try:
-            # Skip simulations with too few or too many hosts
+            # Skip already finished simulations
+            sim_seed = extract_seed(file)
+            if seeds and sim_seed in seeds:
+                logger.info(
+                    f"Skipping already finished file: {file.name}"
+                )
+                continue
+
+            # Skip simulations with too few hosts
             host_count = peek_host_count(file)
             if min_hosts and host_count < min_hosts:
                 logger.info(
@@ -99,22 +110,24 @@ def apply_single_level(
                     f"skipping {file.name} ({host_count} < {min_hosts})."
                 )
                 continue
-            if max_hosts and host_count > max_hosts:
-                logger.info(
-                    f"Level {level}: "
-                    f"skipping {file.name} ({host_count} > {max_hosts})."
-                )
-                continue
 
-            sim_seed = extract_seed(file)
-
-            if seeds and sim_seed in seeds:
+            # Skip simulations with too many hosts
+            if truncate == 0 and host_count > max_hosts:
                 logger.info(
-                    f"Skipping already finished file: {file.name}"
+                    f"Level {level}: skipping {file.name} ({host_count} > {max_hosts})."
                 )
                 continue
 
             sim = NosoiSimulation.from_parquet(file)
+
+            # Truncate if necessary
+            if truncate > 0 and sim.n_hosts > max_hosts:
+                logger.info(
+                    f"Level {level}: truncating {file.name} "
+                    f"({host_count} > {max_hosts}), target {truncate}."
+                )
+
+            sim = sim.truncate(truncate)
 
             # Create a unique 32-bit seed for reproducable data degradation
             deg_seed = deterministic_seed(sim_seed, level)
@@ -148,9 +161,17 @@ def apply_single_level(
 
 
 def _apply_level(args):
-    path, level, output_dir, min_hosts, max_hosts = args
+    path, level, output_dir, min_hosts, max_hosts, truncate = args
     strategy = RandomNodeDrop(level)
-    apply_single_level(path, strategy, level, output_dir, min_hosts, max_hosts)
+    apply_single_level(
+        path,
+        strategy,
+        level,
+        output_dir,
+        min_hosts,
+        max_hosts,
+        truncate
+    )
 
 
 def apply_all_levels(
@@ -158,7 +179,8 @@ def apply_all_levels(
     levels: np.ndarray,
     output_dir: Path,
     min_hosts: float,
-    max_hosts: float
+    max_hosts: float,
+    truncate: int
 ) -> None:
     """
     Apply multiple levels of data scarcity to all simulation files.
@@ -171,11 +193,19 @@ def apply_all_levels(
         The drop percentages to apply (e.g., [0.0, 0.1, 0.2, ...]).
     output_dir : Path
         Path to output scare summary statistic datasets to.
+    min_hosts : float
+        Only include transmission chains with at least this minimum number of
+        hosts.
+    max_hosts : float
+        Only include transmission chains with at most this maximum number of
+        hosts.
+    truncate: int
+         If > 0, truncate oversized simulations to this number of hosts.
     """
     logger = get_logger()
     logger.info(f"Starting processing with levels: {levels}")
     with Pool() as pool:
-        args = [(path, level, output_dir, min_hosts, max_hosts) for level in levels]
+        args = [(path, level, output_dir, min_hosts, max_hosts, truncate) for level in levels]
         pool.map(_apply_level, args)
     logger.info("Finished applying all scarcity levels.")
 
@@ -206,6 +236,9 @@ def cli_main():
         help="Maximum number of hosts allowed."
     )
     parser.add_argument(
+        "--truncate", type=int, default=0,
+        help="If > 0, truncate oversized simulations to this number of hosts.")
+    parser.add_argument(
         "--min-level", type=int, default=0.00,
         help="Lower bound level of scarcity to apply (inclusive)."
     )
@@ -233,6 +266,7 @@ def cli_main():
         output_dir=args.output,
         min_hosts=args.min_hosts,
         max_hosts=args.max_hosts,
+        truncate=args.truncate
     )
 
 
