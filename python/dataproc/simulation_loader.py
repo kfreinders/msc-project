@@ -31,19 +31,19 @@ class NosoiSimulation:
     @df.setter
     def df(self, new_df: pd.DataFrame):
         self._df = new_df
-        self._graph = self._df_to_graph()
+        self._graph = self.df_to_graph(new_df)
         self._invalidate_caches()
 
     @property
     def graph(self) -> nx.DiGraph:
         if self._graph is None:
-            self._graph = self._df_to_graph()
+            self._graph = self.df_to_graph(self.df)
         return self._graph
 
     @graph.setter
     def graph(self, new_graph: nx.DiGraph):
         self._graph = new_graph
-        self._df = self._graph_to_df(new_graph)
+        self._df = self.graph_to_df(new_graph)
         self._invalidate_caches()
 
     @cached_property
@@ -153,13 +153,19 @@ class NosoiSimulation:
 
         return df
 
-    def _df_to_graph(self) -> nx.DiGraph:
+    @staticmethod
+    def df_to_graph(df: pd.DataFrame) -> nx.DiGraph:
         """
         Convert the transmission chain to a directed NetworkX graph.
 
         Each node corresponds to a host with metadata (e.g. infection time),
         and each directed edge represents an infection event from infector to
         infectee.
+
+        Parameters
+        ----------
+        df: pdf.DataFrame
+            A pandas dataframe representation of the transmission chain.
 
         Returns
         -------
@@ -169,7 +175,7 @@ class NosoiSimulation:
         """
         graph: nx.DiGraph = nx.DiGraph()
 
-        for _, row in self.df.iterrows():
+        for _, row in df.iterrows():
             node_id = row["hosts.ID"]
             graph.add_node(node_id, **row.to_dict())
             if pd.notna(row["inf.by"]):
@@ -177,12 +183,33 @@ class NosoiSimulation:
 
         return graph
 
-    def _graph_to_df(self, graph: nx.DiGraph) -> pd.DataFrame:
+    @staticmethod
+    def graph_to_df(graph: nx.DiGraph) -> pd.DataFrame:
+        """
+        Convert the transmission chain from nx.Digraph format to a pandas df.
+
+        Each node corresponds to a host with metadata (e.g. infection time),
+        and each directed edge represents an infection event from infector to
+        infectee.
+
+        Parameters
+        ----------
+        graph: nx.DiGraph
+            A networkx digraph representation of the transmission chain.
+
+        Returns
+        -------
+        pdf.DataFrame
+            Dataframe containing all hosts and their respective properties,
+            such as infection timing, infector and fate.
+        """
         data = []
         for node_id, attr in graph.nodes(data=True):
             row = dict(attr)
             row["hosts.ID"] = node_id
-            inf_by = next((src for src, tgt in graph.in_edges(node_id)), np.nan)
+            inf_by = next(
+                (src for src, tgt in graph.in_edges(node_id)), np.nan
+            )
             row["inf.by"] = inf_by
             data.append(row)
 
