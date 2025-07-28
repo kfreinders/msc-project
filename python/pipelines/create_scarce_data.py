@@ -50,7 +50,7 @@ def apply_single_level(
     root_dir: Path,
     strategy: DataScarcityStrategy,
     level: float,
-    output_dir: Path,
+    output_path: Path,
     min_hosts: float,
     max_hosts: float,
     truncate: int
@@ -71,7 +71,7 @@ def apply_single_level(
         Strategy to apply.
     level : float
         The fraction of data to drop, used in output filename.
-    output_dir : Path
+    output_path : Path
         Directory to save the output CSV file.
     min_hosts : float
         Only include transmission chains with at least this minimum number of
@@ -84,8 +84,7 @@ def apply_single_level(
     """
     logger = get_logger()
     logger.info(f"Applying scarcity level {level:.2f} to files in {root_dir}")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"scarce_{level:.2f}.csv"
+    output_path = output_path / f"scarce_{level:.2f}.csv"
 
     seeds, headers = get_seeds(output_path)
 
@@ -161,13 +160,13 @@ def apply_single_level(
 
 
 def _apply_level(args):
-    path, level, output_dir, min_hosts, max_hosts, truncate = args
+    path, level, output_path, min_hosts, max_hosts, truncate = args
     strategy = RandomNodeDrop(level)
     apply_single_level(
         path,
         strategy,
         level,
-        output_dir,
+        output_path,
         min_hosts,
         max_hosts,
         truncate
@@ -177,7 +176,7 @@ def _apply_level(args):
 def apply_all_levels(
     path: Path,
     levels: np.ndarray,
-    output_dir: Path,
+    output_path: Path,
     min_hosts: float,
     max_hosts: float,
     truncate: int
@@ -191,7 +190,7 @@ def apply_all_levels(
         Path to the directory containing simulation .parquet files.
     levels : ArrayLike or Sequence[float]
         The drop percentages to apply (e.g., [0.0, 0.1, 0.2, ...]).
-    output_dir : Path
+    output_path : Path
         Path to output scare summary statistic datasets to.
     min_hosts : float
         Only include transmission chains with at least this minimum number of
@@ -205,7 +204,7 @@ def apply_all_levels(
     logger = get_logger()
     logger.info(f"Starting processing with levels: {levels}")
     with Pool() as pool:
-        args = [(path, level, output_dir, min_hosts, max_hosts, truncate) for level in levels]
+        args = [(path, level, output_path, min_hosts, max_hosts, truncate) for level in levels]
         pool.map(_apply_level, args)
     logger.info("Finished applying all scarcity levels.")
 
@@ -220,11 +219,11 @@ def cli_main():
     )
 
     parser.add_argument(
-        "--input", type=Path, default=Path("data/nosoi"),
+        "--input-path", type=Path, default=Path("data/nosoi"),
         help="Path to directory with input .parquet simulations."
     )
     parser.add_argument(
-        "--output", type=Path, default=Path("data/scarce_stats"),
+        "--output-path", type=Path, default=Path("data/scarce_stats"),
         help="Directory to save degraded summary statistics."
     )
     parser.add_argument(
@@ -239,11 +238,11 @@ def cli_main():
         "--truncate", type=int, default=0,
         help="If > 0, truncate oversized simulations to this number of hosts.")
     parser.add_argument(
-        "--min-level", type=int, default=0.00,
+        "--min-level", type=float, default=0.00,
         help="Lower bound level of scarcity to apply (inclusive)."
     )
     parser.add_argument(
-        "--max-level", type=int, default=0.5,
+        "--max-level", type=float, default=0.5,
         help="Upper bound level of scarcity to apply (inclusive)."
     )
     parser.add_argument(
@@ -253,17 +252,47 @@ def cli_main():
 
     args = parser.parse_args()
 
+    # Argument validation
+    if args.min_hosts < 1:
+        parser.error("--min-hosts must be >= 1")
+
+    if args.max_hosts != math.inf and args.max_hosts < args.min_hosts:
+        parser.error("--max-hosts must be >= --min-hosts")
+
+    if args.truncate > 0 and not (args.min_hosts <= args.truncate <= args.max_hosts):
+        parser.error(
+            f"--truncate {args.truncate} is invalid. "
+            f"Must be between min-hosts ({args.min_hosts}) "
+            f"and max-hosts ({args.max_hosts})."
+        )
+
+    if args.min_level < 0.0 or args.max_level > 1.0:
+        parser.error("Level boundaries must must all be in [0, 1]")
+
+    if not args.input_path.exists():
+        parser.error(
+            f"Input path {args.input_path} does not exist."
+        )
+
+    if args.steps_level < 1:
+        parser.error("--steps-level must be >= 1")
+
+    args.output_path.mkdir(parents=True, exist_ok=True)
+
     setup_logging(run_name="create_scarce_sst")
     levels = np.linspace(
-        float(args.levels_min),
-        float(args.levels_max),
-        num=args.levels_steps
+        args.min_level,
+        args.max_level,
+        num=args.steps_level
     )
 
+    logger = get_logger()
+    logger.info(f"Processing scarcity levels: {levels}")
+
     apply_all_levels(
-        path=args.input,
+        path=args.input_path,
         levels=levels,
-        output_dir=args.output,
+        output_path=args.output_path,
         min_hosts=args.min_hosts,
         max_hosts=args.max_hosts,
         truncate=args.truncate
