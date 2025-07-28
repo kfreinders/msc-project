@@ -100,14 +100,15 @@ def _plot_shap_violin(
     inputs_numpy: np.ndarray,
     feature_names: list[str],
     output_name: str,
-    output_path: Path
+    output_path: Path,
+    max_display: int,
 ) -> Path:
     plt.figure(figsize=(12, 6), constrained_layout=True)
     shap.plots.violin(
         shap_values,
         inputs_numpy,
         feature_names=feature_names,
-        max_display=5,
+        max_display=max_display,
         show=False,
     )
     plt.title(f"{output_name}")
@@ -121,9 +122,10 @@ def make_shap_plots(
     model: torch.nn.Module,
     test_split: NosoiSplit,
     device: torch.device,
-    max_samples: int = 5000,
-    background_size: int = 100,
-    output_path: Path = Path(".")
+    max_samples: int,
+    background_size: int,
+    max_display: int,
+    output_path: Path
 ) -> list[Path]:
     """
     Generate SHAP violin plots for each output parameter and save them to disk.
@@ -154,7 +156,8 @@ def make_shap_plots(
             inputs_numpy,
             feature_names,
             output_name,
-            output_path
+            output_path,
+            max_display=max_display
         )
 
         png_files.append(png_path)
@@ -201,6 +204,7 @@ def run_shap(
     splits_path: Path,
     model_path: Path,
     n_samples: int,
+    max_display: int,
     background_size: int,
     output_path: Path
 ) -> None:
@@ -249,6 +253,7 @@ def run_shap(
         device=device,
         max_samples=n_samples,
         background_size=background_size,
+        max_display=max_display,
         output_path=output_path
     )
     combine_shap_images(
@@ -260,7 +265,9 @@ def run_shap(
 
 def cli_main():
     parser = argparse.ArgumentParser(
-        description=("Make SHAP plots of summary statistics for a DNN."),
+        description=(
+            "Make SHAP violin plots of summary statistics for a DNN."
+        ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
@@ -283,7 +290,10 @@ def cli_main():
         "--background-size", type=int, default=1_000,
         help="Number of background samples."
     )
-
+    parser.add_argument(
+        "--max-display", type=int, default=5,
+        help="How many features to display in the SHAP violin plots."
+    )
     parser.add_argument(
         "--output-path", type=str, default="data/shap",
         help="Directory to save output data."
@@ -295,6 +305,7 @@ def cli_main():
         model_path=Path(args.model_path),
         output_path=Path(args.output_path),
         n_samples=args.n_samples,
+        max_display=args.max_display,
         background_size=args.background_size,
     )
 
