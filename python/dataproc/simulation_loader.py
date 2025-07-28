@@ -1,3 +1,4 @@
+import copy
 from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Optional
@@ -216,3 +217,59 @@ class NosoiSimulation:
         df = pd.DataFrame(data)
         df = df.sort_values("hosts.ID").reset_index(drop=True)
         return df
+
+    def copy(self) -> "NosoiSimulation":
+        return copy.deepcopy(self)
+
+    def truncate(
+        self,
+        target_size: int,
+        inplace: bool = False
+    ) -> "NosoiSimulation":
+        """
+        Return a truncated copy of the simulation.
+
+        This function truncates the transmission chain until the desired number
+        of hosts is reached. It removes hosts in reverse order of infection
+        time: hosts that were infected last are truncated first. This also
+        guarantees that there are no dangling inf.by references or children
+        without parents.
+
+        Parameters
+        ----------
+        target_size: int
+            The target number of hosts to truncate the transmission chain to.
+            If zero, the function just returns a copy of the original
+            NosoiSimulation.
+        inplace : bool, optional (default=False)
+            If True, modify the current NosoiSimulation in-place. If False,
+            return a new truncated NosoiSimulation object.
+
+        Returns
+        -------
+        "NosoiSimulation"
+            A copy of the NosoiSimulation object with the transmission chain
+            truncated to the specified number of hosts
+        """
+        if target_size >= self.n_hosts or target_size <= 0:
+            return self if inplace else self.copy()
+
+        nodes_sorted = sorted(
+            self.graph.nodes,
+            key=lambda n: self.graph.nodes[n]["inf.time"]
+        )
+        keep_nodes = nodes_sorted[:target_size]
+
+        truncated_graph = nx.DiGraph(self.graph.subgraph(keep_nodes))
+        new_df = self.graph_to_df(truncated_graph)
+
+        if inplace:
+            self.graph = truncated_graph
+            self.metadata["truncated_size"] = target_size
+            return self
+
+        return NosoiSimulation(
+            metadata={**self.metadata, "truncated_size": target_size},
+            seed=self.seed,
+            _df=new_df
+        )
