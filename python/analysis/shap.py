@@ -100,7 +100,7 @@ def _plot_shap_violin(
     inputs_numpy: np.ndarray,
     feature_names: list[str],
     output_name: str,
-    output_dir: Path
+    output_path: Path
 ) -> Path:
     plt.figure(figsize=(12, 6), constrained_layout=True)
     shap.plots.violin(
@@ -111,7 +111,7 @@ def _plot_shap_violin(
         show=False,
     )
     plt.title(f"{output_name}")
-    output_path = output_dir / f"shap_summary_{output_name}.png"
+    output_path = output_path / f"shap_summary_{output_name}.png"
     plt.savefig(output_path, dpi=300)
     plt.close()
     return output_path
@@ -123,7 +123,7 @@ def make_shap_plots(
     device: torch.device,
     max_samples: int = 5000,
     background_size: int = 100,
-    output_dir: Path = Path(".")
+    output_path: Path = Path(".")
 ) -> list[Path]:
     """
     Generate SHAP violin plots for each output parameter and save them to disk.
@@ -154,7 +154,7 @@ def make_shap_plots(
             inputs_numpy,
             feature_names,
             output_name,
-            output_dir
+            output_path
         )
 
         png_files.append(png_path)
@@ -201,10 +201,11 @@ def run_shap(
     splits_path: Path,
     model_path: Path,
     n_samples: int,
+    background_size: int,
     output_path: Path
 ) -> None:
     # Set up logger
-    setup_logging("training")
+    setup_logging("SHAP")
     logger = logging.getLogger(__name__)
 
     # Use CUDA if available
@@ -243,11 +244,12 @@ def run_shap(
 
     logger.info("Computing SHAP values...")
     png_files = make_shap_plots(
-        model,
-        test_split,
-        device,
-        n_samples,
-        output_dir=output_path
+        model=model,
+        test_split=test_split,
+        device=device,
+        max_samples=n_samples,
+        background_size=background_size,
+        output_path=output_path
     )
     combine_shap_images(
         png_files,
@@ -258,7 +260,8 @@ def run_shap(
 
 def cli_main():
     parser = argparse.ArgumentParser(
-        description=("")
+        description=("Make SHAP plots of summary statistics for a DNN."),
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
     parser.add_argument(
@@ -273,9 +276,14 @@ def cli_main():
         )
     )
     parser.add_argument(
-        "--n-samples", type=int, default=5_000,
+        "--n-samples", type=int, default=1_000,
         help="Number of samples to use."
     )
+    parser.add_argument(
+        "--background-size", type=int, default=1_000,
+        help="Number of background samples."
+    )
+
     parser.add_argument(
         "--output-path", type=str, default="data/shap",
         help="Directory to save output data."
@@ -287,6 +295,7 @@ def cli_main():
         model_path=Path(args.model_path),
         output_path=Path(args.output_path),
         n_samples=args.n_samples,
+        background_size=args.background_size,
     )
 
 
