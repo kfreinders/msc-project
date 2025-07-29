@@ -1,3 +1,4 @@
+import argparse
 import logging
 import numpy as np
 from pathlib import Path
@@ -10,7 +11,11 @@ from utils.logging_config import setup_logging
 from utils.utils import plot_predictions, predict_nosoi_parameters
 
 
-def main() -> None:
+def compute_predicted_vs_true(
+    splits_path: Path,
+    model_path: Path,
+    output_path: Path
+) -> None:
     # Set up logger
     setup_logging("predicted_vs_true")
     logger = logging.getLogger(__name__)
@@ -19,18 +24,12 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
-    # Set root path
-    root_path = Path("data/splits/scarce_0.00")
-
-    test_split = NosoiSplit.load("test", root_path)
-    logger.info(f"Loaded saved data splits from {root_path}")
+    test_split = NosoiSplit.load("test", splits_path)
 
     # Retrieve hyperparameters
-    with open(root_path / "best_config.json") as handle:
+    with open(model_path / "best_config.json") as handle:
         data = json.load(handle)
         cfg = HyperParams.from_dict(data)
-
-    logger.info(f"HyperParams: {cfg}")
 
     # Set up model architecture
     model = model_factory(
@@ -41,8 +40,7 @@ def main() -> None:
     )
 
     # Load model (redundant in case since already in memory)
-    model_path = root_path / "regressor.pt"
-    logger.info(f"Loading saved model from: {model_path}")
+    model_path = model_path / "regressor.pt"
     model.load_state_dict(
         torch.load(model_path, map_location=device)
     )
@@ -60,9 +58,37 @@ def main() -> None:
     logger.info("Generating predicted vs true plot...")
     n_hosts = test_split.get_raw_feature("SST_06")
     fig = plot_predictions(preds, trues, test_split.y_colnames, n_hosts)
-    fig.savefig("predicted_vs_true.png", dpi=400, bbox_inches="tight")
+    fig.savefig(str(output_path), dpi=400, bbox_inches="tight")
     logger.info("Done")
 
 
+def cli_main():
+    parser = argparse.ArgumentParser(
+        description=("Plot predicted versus true values for a trained DNN.")
+    )
+    parser.add_argument(
+        "--splits-path", type=Path, default=Path("data/splits/scarce_0.00"),
+        help="Path to the directory containing pickled NosoiSplit object."
+    )
+    parser.add_argument(
+        "--model-path", type=Path, default=Path("data/dnn/scarce_0.00"),
+        help=(
+            "Path to the directory containing the pickled DNN (regressor.pt) "
+            "and hyperparameter configuration (best_config.json)"
+        )
+    )
+    parser.add_argument(
+        "--output-path", type=str, default="./predicted_vs_true.png",
+        help="Where to save the plot."
+    )
+
+    args = parser.parse_args()
+    compute_predicted_vs_true(
+        args.splits_path,
+        args.model_path,
+        args.output_path
+    )
+
+
 if __name__ == "__main__":
-    main()
+    cli_main()
