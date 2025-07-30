@@ -184,7 +184,9 @@ def plot_error_distributions(
 
 def cli_main():
     parser = argparse.ArgumentParser(
-        description="Compare prediction error distributions of DNN vs ABC."
+        description="Compare prediction error distributions of DNN vs ABC.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+
     )
     parser.add_argument(
         "--abc", type=str, default="data/benchmarks/abc_data.csv",

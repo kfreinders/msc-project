@@ -438,7 +438,10 @@ def run_abc(
 
 def cli_main():
     parser = argparse.ArgumentParser(
-        description=("Infer posterior nosoi parameter distributions with ABC.")
+        description=(
+            "Infer posterior nosoi parameter distributions with ABC."
+        ),
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
     parser.add_argument(

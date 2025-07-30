@@ -64,7 +64,8 @@ def compute_predicted_vs_true(
 
 def cli_main():
     parser = argparse.ArgumentParser(
-        description=("Plot predicted versus true values for a trained DNN.")
+        description="Plot predicted versus true values for a trained DNN.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument(
         "--splits-path", type=Path, default=Path("data/splits/scarce_0.00"),

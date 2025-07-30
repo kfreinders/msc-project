@@ -163,7 +163,8 @@ def run_predicted_vs_true(
 
 def cli_main():
     parser = argparse.ArgumentParser(
-        description=("Infer posterior nosoi parameter distributions with ABC.")
+        description="Compute MAE in predictions for a trained DNN.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
     parser.add_argument(
