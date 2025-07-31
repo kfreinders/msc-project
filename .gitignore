@@ -5,6 +5,3 @@
 __pycache__
 .mypy_cache/
 logs
-*.png
-*.pdf
-*.csv
