@@ -16,6 +16,7 @@ from models.interfaces import TrainableModel
 from utils.logging_config import setup_logging
 from utils.utils import predict_nosoi_parameters, save_torch_with_versioning
 from models.tuning import (
+    HyperParams,
     set_seed,
     model_factory,
     optuna_study,
@@ -163,51 +164,76 @@ def main() -> None:
         test_split = NosoiSplit.load("test", split_dir)
 
         json_path = root_path / "results.json"
+        model_path = root_path / "regressor.pt"
+        best_config_path = model_dir / "best_config.json"
         json_path.parent.mkdir(parents=True, exist_ok=True)
 
-        best_cfg, _ = optuna_study(
-            train_split,
-            val_split,
-            device,
-            n_trials=100,
-            study_name=f"study_{level}",
-            storage_path=root_path / "optuna_study.db"
-        )
-
-        logger.info(f"Best config for {level}: {best_cfg}")
-
-        # Save best config to JSON
-        best_config_path = model_dir / "best_config.json"
-        with best_config_path.open("w") as f:
-            json.dump(best_cfg.as_dict(), f, indent=4)
-
-        logger.info(
-            f"Exported best hyperparameter config to {best_config_path}"
-        )
-
-        # Retrain model
-        logger.info(
-            "Now training model with best hyperparameters. "
-            "This may take a while..."
-        )
-        trained_model, _ = train_single_config(
-            best_cfg,
-            model_factory,
-            train_split,
-            val_split,
-            device
-        )
-
-        # Save the trained model if it doesn't exist yet.
-        model_path = root_path / "regressor.pt"
-        if model_path.is_file():
-            logger.info(f"{model_path} already exists: not overwriting")
-        else:
-            torch.save(trained_model.state_dict(), model_path)
-            save_torch_with_versioning(
-                trained_model, model_path
+        if best_config_path.exists() and model_path.exists():
+            logger.info(
+                f"Found existing model and config for {level}, loading "
+                "instead of training."
             )
-            logger.info(f"Saved model to {model_path}")
+
+            # Load config
+            with best_config_path.open("r") as f:
+                best_cfg = HyperParams.from_dict(json.load(f))
+
+            # Set up model
+            trained_model = model_factory(
+                test_split.input_dim,
+                test_split.output_dim,
+                best_cfg,
+                device
+            )
+            trained_model.load_state_dict(
+                torch.load(model_path, map_location=device)
+            )
+            trained_model.to(device)
+        else:
+            logger.info(
+                f"No existing model found for {level}, starting training..."
+            )
+
+            best_cfg, _ = optuna_study(
+                train_split,
+                val_split,
+                device,
+                n_trials=100,
+                study_name=f"study_{level}",
+                storage_path=root_path / "optuna_study.db"
+            )
+
+            logger.info(f"Best config for {level}: {best_cfg}")
+
+            # Save best config to JSON
+            with best_config_path.open("w") as f:
+                json.dump(best_cfg.as_dict(), f, indent=4)
+            logger.info(
+                f"Exported best hyperparameter config to {best_config_path}"
+            )
+
+            # Retrain model
+            logger.info(
+                "Now training model with best hyperparameters. "
+                "This may take a while..."
+            )
+            trained_model, _ = train_single_config(
+                best_cfg,
+                model_factory,
+                train_split,
+                val_split,
+                device
+            )
+
+            # Save the trained model if it doesn't exist yet.
+            if model_path.is_file():
+                logger.info(f"{model_path} already exists: not overwriting")
+            else:
+                torch.save(trained_model.state_dict(), model_path)
+                save_torch_with_versioning(
+                    trained_model, model_path
+                )
+                logger.info(f"Saved model to {model_path}")
 
         # Make the test set dataloader
         test_loader = test_split.make_dataloader(best_cfg.batch_size)
