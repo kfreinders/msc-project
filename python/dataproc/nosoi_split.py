@@ -16,7 +16,6 @@ Typical usage involves preparing splits in a data processing pipeline and
 loading them for training and evaluation of neural network models.
 """
 
-import os
 from dataclasses import dataclass
 from typing import Optional
 
@@ -122,11 +121,11 @@ class NosoiSplit:
             Directory where the files will be saved.
         """
         # Make output dir if it doesn't exist already
-        os.makedirs(output_dir, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         # Save the PyTorch tensors (X, y) as .pt
-        torch.save(self.X, os.path.join(output_dir, f"{name}_x.pt"))
-        torch.save(self.y, os.path.join(output_dir, f"{name}_y.pt"))
+        torch.save(self.X, output_dir / f"{name}_x.pt")
+        torch.save(self.y, output_dir / f"{name}_y.pt")
 
         raw_data = {
             "x_raw": self.x_raw,
@@ -144,7 +143,7 @@ class NosoiSplit:
             raw_data["y_columns"] = np.array(self.y_colnames)
 
         np.savez(
-            os.path.join(output_dir, f"{name}_raw.npz"),
+            output_dir / f"{name}_raw.npz",
             **raw_data,
             allow_pickle=True
         )
@@ -153,7 +152,7 @@ class NosoiSplit:
     def load(
         cls,
         name: str,
-        input_dir: Path,
+        path: Path,
         device: Optional[torch.device] = None
     ) -> "NosoiSplit":
         """
@@ -166,7 +165,7 @@ class NosoiSplit:
         ----------
         name : str
             Prefix of the saved files to load (e.g., 'train', 'val', 'test').
-        input_dir : Path
+        path : Path
             Directory containing the saved files.
         device : torch.device, optional
             Device to map tensors to (e.g., 'cpu', 'cuda'). Defaults to CPU.
@@ -179,13 +178,16 @@ class NosoiSplit:
         if device is None:
             device = torch.device("cpu")
 
-        X = torch.load(
-            os.path.join(input_dir, f"{name}_x.pt"), map_location=device
-        )
-        y = torch.load(
-            os.path.join(input_dir, f"{name}_y.pt"), map_location=device
-        )
-        raw = np.load(os.path.join(input_dir, f"{name}_raw.npz"))
+        x_file = path / f"{name}_x.pt"
+        y_file = path / f"{name}_y.pt"
+        raw_file = path / f"{name}_raw.npz"
+
+        if any(not f.exists() for f in [x_file, y_file, raw_file]):
+            raise FileNotFoundError(f"Missing files for split '{name}'")
+
+        X = torch.load(x_file, map_location=device)
+        y = torch.load(y_file, map_location=device)
+        raw = np.load(raw_file)
 
         x_raw_columns = raw.get("x_raw_columns", None)
         if x_raw_columns is not None:
