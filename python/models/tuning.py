@@ -133,6 +133,7 @@ def optuna_objective(
     device: torch.device,
     max_epochs: int,
     patience: int,
+    search_space: dict[str, list[int | float]]
 ) -> float:
     """
     Objective function for Optuna hyperparameter optimization.
@@ -156,6 +157,9 @@ def optuna_objective(
         Maximum number of training epochs.
     patience : int
         Number of epochs to wait for improvement before early stopping.
+    search_space : dict[str, list[int | float]]
+        Dictionary of hyperparameter values that define the allowed search
+        space for Optuna hyperparameter optimization.
 
     Returns
     -------
@@ -164,11 +168,11 @@ def optuna_objective(
         configuration.
     """
     cfg = HyperParams(
-        learning_rate=trial.suggest_float("learning_rate", 1e-4, 1e-2, log=True),
-        hidden_size=trial.suggest_categorical("hidden_size", [16, 32, 64, 128, 256]),
-        num_layers=trial.suggest_int("num_layers", 1, 5),
-        dropout_rate=trial.suggest_float("dropout_rate", 0.1, 0.3),
-        batch_size=trial.suggest_categorical("batch_size", [16, 32, 64, 128]),
+        learning_rate=trial.suggest_categorical("learning_rate", search_space["learning_rate"]),
+        hidden_size=trial.suggest_categorical("hidden_size", search_space["hidden_size"]),
+        num_layers=trial.suggest_categorical("num_layers", search_space["num_layers"]),
+        dropout_rate=trial.suggest_categorical("dropout_rate", search_space["dropout_rate"]),
+        batch_size=trial.suggest_categorical("batch_size", search_space["batch_size"]),
     )
 
     _, val_loss = train_single_config(
@@ -193,7 +197,8 @@ def optuna_study(
     patience: int = 2,
     n_trials: int = 50,
     study_name: str = "nosoi_hyperparameter_tuning",
-    storage_path: Path = Path("optuna_studies/nosoi_study.db")
+    storage_path: Path = Path("optuna_studies/nosoi_study.db"),
+    search_space: Optional[dict[str, list[int | float]]] = None,
 ) -> tuple[HyperParams, float]:
     """
     Run Optuna study to find best hyperparameters.
@@ -217,6 +222,9 @@ def optuna_study(
         Name of the Optuna study.
     storage_path : str
         Path to SQLite DB file for saving the study persistently.
+    search_space : dict[str, list[int | float]]
+        Dictionary of hyperparameter values that define the allowed search
+        space for Optuna hyperparameter optimization.
 
     Returns
     -------
@@ -252,7 +260,8 @@ def optuna_study(
                 val_split,
                 device,
                 max_epochs,
-                patience
+                patience,
+                search_space
             ),
             n_trials=n_trials
         )
