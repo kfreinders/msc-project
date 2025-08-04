@@ -53,7 +53,7 @@ def load_model(
     return trained_model.to(device), best_cfg
 
 
-def evaluate_model(
+def mse_on_test(
     model: TrainableModel,
     test_loader: DataLoader,
     device: torch.device,
@@ -252,7 +252,7 @@ def main() -> None:
         test_loader = test_split.make_dataloader(best_cfg.batch_size)
 
         # Evaluate model on test set
-        test_loss = evaluate_model(
+        test_loss = mse_on_test(
             trained_model,
             test_loader,
             device,
