@@ -24,6 +24,13 @@ from models.tuning import (
 )
 
 
+def load_all_splits(path: Path):
+    train_split = NosoiSplit.load("train", path)
+    val_split = NosoiSplit.load("val", path)
+    test_split = NosoiSplit.load("test", path)
+    return train_split, val_split, test_split
+
+
 def load_model(
     model_path: Path,
     input_dim: int,
@@ -181,9 +188,7 @@ def main() -> None:
             csv_file, dir_master_csv
         )
 
-        train_split = NosoiSplit.load("train", split_dir)
-        val_split = NosoiSplit.load("val", split_dir)
-        test_split = NosoiSplit.load("test", split_dir)
+        train_split, val_split, test_split = load_all_splits(split_dir)
 
         json_path = root_path / "results.json"
         model_path = root_path / "regressor.pt"
