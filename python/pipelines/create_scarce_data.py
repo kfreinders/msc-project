@@ -92,34 +92,34 @@ def apply_single_level(
     first_write = True if not headers else False
 
     for file in find_parquet_files(root_dir):
+        sim_seed = extract_seed(file)
+        host_count = peek_host_count(file)
+
+        # Skip already finished simulations
+        if seeds and sim_seed in seeds:
+            logger.info(f"Skipping already finished file: {file.name}")
+            continue
+
+        # Skip simulations with too few hosts
+        if host_count < min_hosts:
+            logger.info(
+                f"Level {level}: "
+                f"skipping {file.name} ({host_count} < {min_hosts})."
+            )
+            continue
+
+        # Skip simulations with too many hosts
+        if host_count > max_hosts and truncate == 0:
+            logger.info(
+                f"Level {level}: "
+                f"skipping {file.name} ({host_count} > {max_hosts})."
+            )
+            continue
+
         try:
-            # Skip already finished simulations
-            sim_seed = extract_seed(file)
-            if seeds and sim_seed in seeds:
-                logger.info(
-                    f"Skipping already finished file: {file.name}"
-                )
-                continue
-
-            # Skip simulations with too few hosts
-            host_count = peek_host_count(file)
-            if min_hosts and host_count < min_hosts:
-                logger.info(
-                    f"Level {level}: "
-                    f"skipping {file.name} ({host_count} < {min_hosts})."
-                )
-                continue
-
-            # Skip simulations with too many hosts
-            if truncate == 0 and host_count > max_hosts:
-                logger.info(
-                    f"Level {level}: skipping {file.name} ({host_count} > {max_hosts})."
-                )
-                continue
-
             sim = NosoiSimulation.from_parquet(file)
 
-            # Truncate if necessary
+            # Truncate oversized simulations if requested
             if truncate > 0 and sim.n_hosts > max_hosts:
                 logger.info(
                     f"Level {level}: truncating {file.name} "
@@ -128,24 +128,23 @@ def apply_single_level(
 
             sim = sim.truncate(truncate)
 
-            # Create a unique 32-bit seed for reproducable data degradation
+            # Create deterministic degradation seed
             deg_seed = deterministic_seed(sim_seed, level)
             logger.debug(
-                f"Degradation seed {deg_seed} generated from "
-                f"sim_seed={sim_seed}, level={level} "
-                f"for file {file.name}",
+                f"Level: {level}: "
+                f"using degradation seed {deg_seed} for {file.name}"
             )
 
-            # Apply degradation & recompute summary statistics
-            if not math.isclose(level, 0.0):
-                sim.graph = strategy.apply(sim.graph, seed=deg_seed)
+            # Apply degradation if level > 0
+            if math.isclose(level, 0.0):
                 logger.info(
                     f"Level {level}: no scarcity applied to {file.name}"
                 )
+            else:
+                sim.graph = strategy.apply(sim.graph, seed=deg_seed)
 
             # Re-compute summary statistics
             stats_df = compute_summary_statistics(sim)
-
             if stats_df.empty:
                 logger.warning("No stats for %s, skipping.", file.name)
                 continue
@@ -155,7 +154,7 @@ def apply_single_level(
                 output_path, mode="a", header=first_write, index=False
             )
             first_write = False  # Only write header on first iteration
-            logger.debug("Appended stats for seed %010d", sim_seed)
+            logger.info(f"Level {level}: finished {file.name}")
 
         except Exception as e:
             logger.error(
