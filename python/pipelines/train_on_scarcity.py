@@ -24,6 +24,28 @@ from models.tuning import (
 )
 
 
+def load_model(
+    model_path: Path,
+    input_dim: int,
+    output_dim: int,
+    best_cfg_path: Path,
+    device: torch.device
+):
+    with best_cfg_path.open("r") as f:
+        best_cfg = HyperParams.from_dict(json.load(f))
+
+    trained_model = model_factory(
+        input_dim,
+        output_dim,
+        best_cfg,
+        device
+    )
+    trained_model.load_state_dict(
+        torch.load(model_path, map_location=device)
+    )
+    return trained_model.to(device), best_cfg
+
+
 def evaluate_model(
     model: TrainableModel,
     test_loader: DataLoader,
@@ -173,22 +195,13 @@ def main() -> None:
                 f"Found existing model and config for {level}, loading "
                 "instead of training."
             )
-
-            # Load config
-            with best_config_path.open("r") as f:
-                best_cfg = HyperParams.from_dict(json.load(f))
-
-            # Set up model
-            trained_model = model_factory(
-                test_split.input_dim,
-                test_split.output_dim,
-                best_cfg,
+            trained_model, best_cfg = load_model(
+                model_path,
+                train_split.input_dim,
+                train_split.output_dim,
+                best_config_path,
                 device
             )
-            trained_model.load_state_dict(
-                torch.load(model_path, map_location=device)
-            )
-            trained_model.to(device)
         else:
             logger.info(
                 f"No existing model found for {level}, starting training..."
