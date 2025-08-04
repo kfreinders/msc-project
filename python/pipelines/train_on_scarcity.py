@@ -161,13 +161,8 @@ def main() -> None:
     logger.info(f"Set run seed to {seed}")
     logger.info(f"Using device: {device}")
 
-    search_space: dict[str, Sequence[int | float]] = {
-        "learning_rate": [1e-2, 1e-3, 1e-4, 1e-5],
-        "hidden_size": [16, 32, 64, 128, 256],
-        "num_layers": [1, 2, 3, 4, 5],
-        "dropout_rate": [0.1, 0.2, 0.3],
-        "batch_size": [16, 32, 64, 128],
-    }
+    with open(Path("search_space.json"), "r") as f:
+        search_space: dict[str, list[int | float]] = json.load(f)
     logger.info(f"Hyperparameter search space: {search_space}")
 
     for csv_file in all_csv_files:
