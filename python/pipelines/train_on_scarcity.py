@@ -1,12 +1,10 @@
 #!/usr/bin/env python
+import argparse
 from pathlib import Path
-import csv
 import json
 import logging
 from sklearn.metrics import r2_score
-import time
 import torch
-from typing import Sequence
 
 from torch.utils.data import DataLoader
 
@@ -24,11 +22,78 @@ from models.tuning import (
 )
 
 
+def prepare_paths(name: str) -> tuple[Path, Path, Path, Path]:
+    """
+    Prepare the output directory and file paths for a given model run.
+
+    This function ensures the output directory for a DNN run exists and
+    constructs standardized paths for saving the trained model, the best
+    hyperparameter configuration, and the Optuna study database.
+
+    Parameters
+    ----------
+    name : str
+        Unique name for the run, typically derived from the input file stem.
+
+    Returns
+    -------
+    tuple[Path, Path, Path, Path]
+        Paths for the run root directory, trained model, best config, and
+        Optuna study database, respectively.
+    """
+    dnn_root = Path("data/dnn") / name
+    dnn_root.mkdir(parents=True, exist_ok=True)
+    return (
+        dnn_root,
+        dnn_root / "regressor.pt",
+        dnn_root / "best_config.json",
+        dnn_root / "optuna_study.db",
+    )
+
+
 def load_all_splits(path: Path):
+    """
+    Load all available Nosoi data splits (train, validation, test).
+
+    This function reconstructs `NosoiSplit` objects from serialized files
+    stored in the given directory.
+
+    Parameters
+    ----------
+    path : Path
+        Directory containing the saved split files.
+
+    Returns
+    -------
+    tuple[NosoiSplit, NosoiSplit, NosoiSplit]
+        The training, validation, and test splits.
+    """
     train_split = NosoiSplit.load("train", path)
     val_split = NosoiSplit.load("val", path)
     test_split = NosoiSplit.load("test", path)
     return train_split, val_split, test_split
+
+
+def load_search_space(
+    path: Path = Path("search_space.json")
+) -> dict[str, list[int | float]]:
+    """
+    Load the hyperparameter search space from a JSON file.
+
+    Parameters
+    ----------
+    path : Path, optional
+        Path to the JSON file defining the hyperparameter search space.
+        Defaults to "search_space.json".
+
+    Returns
+    -------
+    dict[str, list[int | float]]
+        A dictionary where keys are hyperparameter names and values are lists
+        of candidate values to explore during tuning.
+    """
+    with path.open("r") as f:
+        return json.load(f)
 
 
 def load_model(
@@ -38,6 +103,31 @@ def load_model(
     best_cfg_path: Path,
     device: torch.device
 ):
+    """
+    Load a trained DNN model and its configuration from disk.
+
+    The method restores the model architecture from a saved hyperparameter
+    configuration and loads its trained weights. The model is then mapped onto
+    the specified device.
+
+    Parameters
+    ----------
+    model_path : Path
+        Path to the file containing the trained model weights (.pt).
+    input_dim : int
+        Number of input features for the model.
+    output_dim : int
+        Number of output parameters predicted by the model.
+    best_cfg_path : Path
+        Path to the JSON file storing the best hyperparameter configuration.
+    device : torch.device
+        Device to load the model onto (CPU or CUDA).
+
+    Returns
+    -------
+    tuple[TrainableModel, HyperParams]
+        The loaded model and its associated hyperparameter configuration.
+    """
     with best_cfg_path.open("r") as f:
         best_cfg = HyperParams.from_dict(json.load(f))
 
@@ -53,7 +143,7 @@ def load_model(
     return trained_model.to(device), best_cfg
 
 
-def mse_on_test(
+def compute_mse_on_test(
     model: TrainableModel,
     test_loader: DataLoader,
     device: torch.device,
@@ -136,153 +226,222 @@ def compute_r2_per_param(
     return r2_values
 
 
-def main() -> None:
+def evaluate_model_and_log(
+    model: TrainableModel,
+    test_split: NosoiSplit,
+    best_cfg: HyperParams,
+    device: torch.device
+) -> None:
+    """
+    Evaluate a trained model on the test split and log its performance.
+
+    This function computes the test loss (MSE) and R-squared values for each
+    parameter, logging them for inspection. It uses the batch size defined in
+    the best hyperparameter configuration.
+
+    Parameters
+    ----------
+    model : TrainableModel
+        The trained PyTorch model to be evaluated.
+    test_split : NosoiSplit
+        The test split containing both features and ground truth labels.
+    best_cfg : HyperParams
+        The best hyperparameter configuration obtained via tuning.
+    device : torch.device
+        Device used for evaluation.
+    """
+    test_loader = test_split.make_dataloader(best_cfg.batch_size)
+    test_loss = compute_mse_on_test(model, test_loader, device)
+    r2_values = compute_r2_per_param(model, test_split, test_loader, device)
+    logging.info(f"Test loss: {test_loss:.4f}")
+    logging.info(f"R-squared values: {r2_values}")
+
+
+def main_pipeline(
+    csv_file: Path,
+    csv_master: Path,
+    splits_path: Path,
+    hparamspace_path: Path,
+    n_trials: int,
+    max_epochs,
+    seed: int
+) -> None:
+    """
+    Train or load a DNN to infer nosoi parameters from summary statistics.
+
+    The pipeline checks whether a trained model and configuration already exist
+    for the given scarcity level. If so, they are loaded and evaluated.
+    Otherwise, the pipeline runs hyperparameter optimization with Optuna,
+    retrains the model using the best configuration, saves the results, and
+    evaluates its predictive accuracy.
+
+    Parameters
+    ----------
+    csv_file : Path
+        Path to the CSV file containing summary statistics at a given scarcity
+        level.
+    csv_master : Path
+        Path to the CSV file containing the ground truth nosoi parameters.
+    splits_path : Path
+        Path to the directory containing precomputed NosoiSplit objects.
+    hparamspace_path : Path
+        Path to the JSON file specifying the hyperparameter search space.
+    n_trials : int
+        Number of Optuna trials to run for hyperparameter optimization.
+    max_epochs : int
+        Maximum number of epochs to train the DNN for.
+    seed : int
+        Random seed for reproducibility.
+    """
     # Set up logging
     setup_logging("train-on-scarcity")
     logger = logging.getLogger(__name__)
-
-    rows = [("scarcity", "test_loss")]
-
-    dir_master_csv = Path("data/nosoi/master.csv")
-    dir_scarce_csv = Path("data/scarce_stats")
-    metrics_csv = Path("data/metrics/scarcity_performance.csv")
-    all_csv_files = sorted(dir_scarce_csv.glob("scarce_*.csv"))
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    seed = 42
     set_seed(seed)
 
-    logger.info(
-        f"Found {len(all_csv_files)} summary statistic files for degraded "
-        f"graphs in: {dir_scarce_csv}"
-    )
-    logger.info(f"Reading nosoi parameters from: {dir_master_csv}")
-    logger.info(f"Saving output metrics to: {metrics_csv}")
-    logger.info(f"Set run seed to {seed}")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
-    with open(Path("search_space.json"), "r") as f:
-        search_space: dict[str, list[int | float]] = json.load(f)
+    search_space = load_search_space(hparamspace_path)
     logger.info(f"Hyperparameter search space: {search_space}")
 
-    for csv_file in all_csv_files:
-        level = csv_file.stem
-        model_dir = Path("data/dnn") / level
-        model_dir.mkdir(parents=True, exist_ok=True)
-        root_path = Path("data/dnn") / level
-        metrics_path = model_dir / "metrics.json"
+    name = csv_file.stem
+    dnn_root, model_path, best_config_path, study_path = prepare_paths(name)
 
-        if metrics_path.exists():
-            logger.info(f"Skipping {level}: already completed.")
-            continue
+    logger.info(f"Generating data splits for {csv_file} ...")
 
-        start_time = time.time()
+    splits_path = NosoiDataProcessor.prepare_for_scarcity(csv_file, csv_master)
 
+    if splits_path.exists():
+        logger.info(f"Using existing splits from {splits_path}")
+    else:
         logger.info(f"Generating data splits for {csv_file} ...")
-        split_dir = NosoiDataProcessor.prepare_for_scarcity(
-            csv_file, dir_master_csv
-        )
+        splits_path = NosoiDataProcessor.prepare_for_scarcity(csv_file, csv_master)
+    train_split, val_split, test_split = load_all_splits(splits_path)
 
-        train_split, val_split, test_split = load_all_splits(split_dir)
+    (dnn_root / "results.json").parent.mkdir(parents=True, exist_ok=True)
 
-        json_path = root_path / "results.json"
-        model_path = root_path / "regressor.pt"
-        best_config_path = model_dir / "best_config.json"
-        json_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if best_config_path.exists() and model_path.exists():
-            logger.info(
-                f"Found existing model and config for {level}, loading "
-                "instead of training."
-            )
-            trained_model, best_cfg = load_model(
-                model_path,
-                train_split.input_dim,
-                train_split.output_dim,
-                best_config_path,
-                device
-            )
-        else:
-            logger.info(
-                f"No existing model found for {level}, starting training..."
-            )
-
-            best_cfg, _ = optuna_study(
-                train_split,
-                val_split,
-                device,
-                n_trials=100,
-                study_name=f"study_{level}",
-                storage_path=root_path / "optuna_study.db"
-            )
-
-            logger.info(f"Best config for {level}: {best_cfg}")
-
-            # Save best config to JSON
-            with best_config_path.open("w") as f:
-                json.dump(best_cfg.as_dict(), f, indent=4)
-            logger.info(
-                f"Exported best hyperparameter config to {best_config_path}"
-            )
-
-            # Retrain model
-            logger.info(
-                "Now training model with best hyperparameters. "
-                "This may take a while..."
-            )
-            trained_model, _ = train_single_config(
-                best_cfg,
-                model_factory,
-                train_split,
-                val_split,
-                device
-            )
-
-            # Save the trained model if it doesn't exist yet.
-            if model_path.is_file():
-                logger.info(f"{model_path} already exists: not overwriting")
-            else:
-                torch.save(trained_model.state_dict(), model_path)
-                save_torch_with_versioning(
-                    trained_model, model_path
-                )
-                logger.info(f"Saved model to {model_path}")
-
-        # Make the test set dataloader
-        test_loader = test_split.make_dataloader(best_cfg.batch_size)
-
-        # Evaluate model on test set
-        test_loss = mse_on_test(
-            trained_model,
-            test_loader,
-            device,
-        )
-
-        # Save test loss to metrics file
-        with metrics_path.open("w") as f:
-            json.dump({"test_loss": test_loss}, f, indent=4)
-
+    if best_config_path.exists() and model_path.exists():
         logger.info(
-            f"Finished {level} in {time.time() - start_time:.1f} seconds."
-            f"Test loss: {test_loss:.4f}"
+            f"Found existing model and config for {name}, loading "
+            "instead of training."
         )
-        rows.append((level, f"{test_loss:.4f}"))
-
-        # Get R-squared values for each parameter
-        r2_values = compute_r2_per_param(
-            trained_model,
-            test_split,
-            test_loader,
+        trained_model, best_cfg = load_model(
+            model_path,
+            train_split.input_dim,
+            train_split.output_dim,
+            best_config_path,
             device
         )
-        logger.info(r2_values)
+        evaluate_model_and_log(trained_model, test_split, best_cfg, device)
+        return
 
-    # Save summary CSV
-    metrics_csv.parent.mkdir(parents=True, exist_ok=True)
-    with metrics_csv.open("w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerows(rows)
+    logger.info(
+        f"No existing model found for {name}, starting training..."
+    )
+
+    best_cfg, _ = optuna_study(
+        train_split,
+        val_split,
+        device,
+        max_epochs=max_epochs,
+        n_trials=n_trials,
+        study_name=f"study_{name}",
+        storage_path=study_path,
+        search_space=search_space
+    )
+
+    logger.info(f"Best config for {name}: {best_cfg}")
+
+    # Save best config to JSON
+    with best_config_path.open("w") as f:
+        json.dump(best_cfg.as_dict(), f, indent=4)
+    logger.info(
+        f"Exported best hyperparameter config to {best_config_path}"
+    )
+
+    # Retrain model
+    logger.info(
+        "Now training model with best hyperparameters. "
+        "This may take a while..."
+    )
+    trained_model, _ = train_single_config(
+        best_cfg,
+        model_factory,
+        train_split,
+        val_split,
+        device
+    )
+
+    save_torch_with_versioning(
+        trained_model, model_path
+    )
+    logger.info(f"Saved model to {model_path}")
+
+    evaluate_model_and_log(trained_model, test_split, best_cfg, device)
+
+
+def cli_main() -> None:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Train a DNN on a scarcified data set."
+        ),
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    parser.add_argument(
+        "--scarce-data-path",
+        type=Path,
+        default=Path("data/scarce_stats/scarce_0.00.csv"),
+        help="Path to csv output from create_scarce_data.py."
+    )
+    parser.add_argument(
+        "--master-path",
+        type=Path,
+        default=Path("data/nosoi/master.csv"),
+        help=("Path to file with all original nosoi simulation parameters.")
+    )
+    parser.add_argument(
+        "--splits-path",
+        type=Path,
+        default=Path("data/splits/scarce_0.00"),
+        help="Path to the directory containing pickled NosoiSplit object."
+    )
+    parser.add_argument(
+        "--hparamspace-path",
+        type=Path,
+        default=Path("python/pipelines/hparamspace.json"),
+        help="Path to the hyperparameter search space definition."
+    )
+    parser.add_argument(
+        "--n-trials",
+        type=int,
+        default=100,
+        help="Number of Optuna trials to run for hyperparameter optimization."
+    )
+    parser.add_argument(
+        "--max-epochs",
+        type=int,
+        default=100,
+        help="Maximum number of epochs to train the DNN for."
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducibility."
+    )
+
+    args = parser.parse_args()
+    main_pipeline(
+        csv_file=args.scarce_data_path,
+        csv_master=args.master_path,
+        splits_path=args.splits_path,
+        hparamspace_path=args.hparamspace_path,
+        n_trials=args.n_trials,
+        max_epochs=args.max_epochs,
+        seed=args.seed
+    )
 
 
 if __name__ == "__main__":
-    main()
+    cli_main()
