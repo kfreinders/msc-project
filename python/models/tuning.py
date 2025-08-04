@@ -32,19 +32,15 @@ configuration.
 """
 
 from dataclasses import asdict, dataclass
-from itertools import product
-import json
 import logging
 import optuna
-from random import sample
-from typing import Callable, Dict, Iterable, Optional, Sequence
+from typing import Callable, Dict, Optional
 
 import numpy as np
 from pathlib import Path
 import torch
 from torch import nn, optim
 
-from utils.logging_config import setup_logging
 from .model import NeuralNetwork
 from .interfaces import TrainableModel
 from .training import train
@@ -128,55 +124,6 @@ def set_seed(seed: int = 42) -> None:
     # Disables cuDNN to automatically benchmark multiple convolution algorithms
     # and select the fastest one.
     torch.backends.cudnn.benchmark = False
-
-
-def full_grid_search(
-    space: Dict[str, Sequence[float | int]]
-) -> Iterable[HyperParams]:
-    """
-    Generate all combinations of hyperparameter settings.
-
-    This function creates a list of dictionaries, where each dictionary
-    represents one unique combination of hyperparameter values from the
-    provided search space.
-
-    Parameters
-    ----------
-    params : Dict[str, Sequence[float | int]]
-        Dictionary where keys are hyperparameter names and values are
-        lists of possible values to try.
-
-    Returns
-    -------
-    HyperParams
-        Immutable, hashable bundle of hyperparameters.
-    """
-    keys, values = zip(*space.items())
-    for combo in product(*values):
-        yield HyperParams(**dict(zip(keys, combo)))
-
-
-def random_search(
-    search_space: Dict[str, Sequence[float | int]],
-    k=150
-) -> Iterable[HyperParams]:
-    """
-    Randomly sample k combinations from the hyperparameter search space.
-
-    Parameters
-    ----------
-    params : Dict[str, Sequence[float | int]]
-        Dictionary where keys are hyperparameter names and values are
-        lists of possible values to try.
-
-    Returns
-    -------
-    HyperParams
-        Immutable, hashable bundle of hyperparameters.
-    """
-    subset = sample(list(full_grid_search(search_space)), k=k)
-    for config in subset:
-        yield config
 
 
 def optuna_objective(
@@ -414,120 +361,3 @@ def train_single_config(
         epochs=max_epochs, patience=patience, trial=trial
     )
     return model, float(min(hist["val_loss"]))
-
-
-def backup_json(path: Path) -> None:
-    """
-    Naïve versioning: rename *path* → *stem-1.json*, *stem-2.json*, ...
-
-    Parameters
-    ----------
-    path
-        Path to write the json file to.
-    """
-    if not path.exists():
-        return
-    i = 1
-    while True:
-        candidate = path.with_stem(f"{path.stem}-{i}")
-        if not candidate.exists():
-            path.rename(candidate)
-            break
-        i += 1
-
-
-# TODO: return best model also for ease of use.
-def tune_model(
-    train_split: NosoiSplit,
-    val_split: NosoiSplit,
-    model_factory: Callable[
-        [int, int, HyperParams, torch.device], TrainableModel
-    ],
-    search_space: Dict[str, Sequence[float | int]],
-    search_method: Callable[[Dict[str, Sequence[float | int]]], Iterable[HyperParams]],
-    device: torch.device,
-    output_path: Path,
-    max_epochs: int = 100,
-    patience: int = 5,
-) -> tuple[HyperParams, float]:
-    """
-    Perform a full grid search over all hyperparameter combinations and return
-    the best one.
-
-    Parameters
-    ----------
-    train_split : NosoiSplit
-        Training data split.
-    val_split : NosoiSplit
-        Validation data split.
-    model_factory : Callable
-        Function that returns a model when given input/output dims,
-        hyperparams, and device.
-    search_space : Dict[str, Sequence[float | int]]
-        Hyperparameter search space.
-    search_method : Callable[[Dict[str, Sequence[float | int]]], Iterable[HyperParams]]
-        Which search method to explore the hyperparameter space. Can be
-        full_grid_search or random_search.
-    device : torch.device
-        Training device (CPU or CUDA).
-    output_path : Path
-        Path to save tuning results.
-    max_epochs : int, optional
-        Maximum number of epochs to train. Default is 100.
-    patience : int, optional
-        Early stopping patience. Default is 5.
-
-    Returns
-    -------
-    tuple[HyperParams, float]
-        Best-performing hyperparameter config and its validation loss.
-    """
-    setup_logging("tuning")
-    logger = logging.getLogger(__name__)
-    logger.info("Starting hyperparameter tuning...")
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    backup_json(output_path)
-
-    results: list[tuple[Dict[str, float | int], float]] = []
-    best_loss = float("inf")
-    best_config = None
-
-    logger.info(f"Using search method: {search_method.__name__}")
-    combinations = list(search_method(search_space))
-    logger.info(f"Testing {len(combinations)} hyperparameter combinations.")
-
-    # Loop over and test all hyperparameter combinations
-    for i, cfg in enumerate(combinations, start=1):
-        logger.info(f"Training configuration {i}/{len(combinations)}: {cfg}")
-        _, val_loss = train_single_config(
-            cfg, model_factory, train_split, val_split,
-            device, max_epochs=max_epochs, patience=patience
-        )
-        logger.info(f"Validation loss: {val_loss:.4f}")
-
-        results.append((cfg.as_dict(), val_loss))
-
-        if val_loss < best_loss:
-            best_loss = val_loss
-            best_config = cfg
-
-        # Save checkpoint after each config
-        with open(output_path, "w") as f:
-            json.dump(
-                {
-                    "results": results,
-                    "best": best_config.as_dict() if best_config else None,
-                    "loss": best_loss
-                },
-                f,
-                indent=4
-            )
-
-    if best_config is None:
-        raise RuntimeError(
-            "No model configuration was successfully evaluated."
-        )
-
-    logger.info(f"Best config: {best_config} (loss: {best_loss:.4f})")
-    return best_config, best_loss
