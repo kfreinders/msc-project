@@ -361,7 +361,6 @@ def run_abc(
     n_runs: int,
     quantile: float,
     output_path: Path,
-    n_jobs: int,
     seed: int,
     make_plots: bool
 ) -> None:
@@ -384,17 +383,10 @@ def run_abc(
         (e.g. 0.01).
     output_path : Path
         Path to save the resulting CSV file of posterior estimates and plots.
-    n_jobs : int
-        Number of parallel jobs to run for ABC inference.
     seed : int
         Random seed for reproducibility of sampling.
     make_plots : bool
         Whether to generate and save prediction error plots per parameter.
-
-    Raises
-    ------
-    RuntimeError:
-        If `n_jobs` exceeds the number of CPU cores.
     """
     logger = logging.getLogger(__name__)
     setup_logging(run_name="abc")
@@ -429,10 +421,7 @@ def run_abc(
         quantile=quantile
     )
 
-    if n_jobs > (n_cores := cpu_count()):
-        raise RuntimeError(
-            f"Too many jobs: {n_jobs} > available CPU cores: {n_cores}"
-        )
+    n_cores = cpu_count() if n_runs >= cpu_count() else n_runs
     logger.info(
         f"Starting jobs on {n_cores} cores. This may take a while..."
     )
@@ -493,10 +482,6 @@ def cli_main():
         help="Directory to save output data."
     )
     parser.add_argument(
-        "--n-jobs", type=int, default=cpu_count(),
-        help="Number of parallel jobs to run (default: number of CPU cores)."
-    )
-    parser.add_argument(
         "--seed", type=int, default=42,
         help="Random seed for reproducibility."
     )
@@ -511,7 +496,6 @@ def cli_main():
         n_runs=args.n_runs,
         quantile=args.quantile,
         output_path=Path(args.output_path),
-        n_jobs=args.n_jobs,
         seed=args.seed,
         make_plots=args.make_plots
     )
