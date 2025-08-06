@@ -133,7 +133,8 @@ def abc_regression_adjustment(
     sim_stats: torch.Tensor,
     sim_params: torch.Tensor,
     distance_fn: Callable[[torch.Tensor, torch.Tensor], float],
-    quantile: float = 0.01
+    quantile: float = 0.01,
+    exclude_idx: int | None = None
 ) -> torch.Tensor:
     """
     Perform ABC with regression adjustment.
@@ -150,22 +151,35 @@ def abc_regression_adjustment(
         Function to compute distance between summary statistics.
     quantile : float
         Proportion of simulations to keep (e.g. 0.01 keeps 1% closest samples).
+        Default is 0.01.
+    exclude_idx : int, optional
+        Index of the observation to exclude from the candidate pool
+        (to avoid data leakage). Default is None.
 
     Returns
     -------
     torch.Tensor
         Posterior mean estimate after regression adjustment.
     """
+    # Build mask to exclude the observed sample
+    if exclude_idx is not None:
+        mask = torch.ones(len(sim_stats), dtype=torch.bool)
+        mask[exclude_idx] = False
+        sim_stats_masked = sim_stats[mask]
+        sim_params_masked = sim_params[mask]
+    else:
+        sim_stats_masked = sim_stats
+        sim_params_masked = sim_params
+
     # Step 1: compute distances
-    distances = torch.tensor(
-        [distance_fn(obs_stats, sim) for sim in sim_stats]
-    )
-    k = max(1, int(len(distances) * quantile))
+    distances = torch.tensor([
+        distance_fn(obs_stats, sim) for sim in sim_stats_masked
+    ])
     closest_indices = torch.topk(distances, k=k, largest=False).indices
 
-    X = sim_stats[closest_indices]        # (k, d)
-    y = sim_params[closest_indices]       # (k, p)
-    dists = distances[closest_indices]    # (k,)
+    X = sim_stats_masked[closest_indices]   # shape (k, features)
+    y = sim_params_masked[closest_indices]  # shape (k, parameters)
+    dists = distances[closest_indices]      # shape (k)
 
     # Step 2: center summary statistics around the observation
     X_centered = X - obs_stats
@@ -176,24 +190,21 @@ def abc_regression_adjustment(
 
     # Step 4: Local-linear regression for each parameter
     adjusted_params = []
-
-    for i in range(y.shape[1]):
+    for j in range(y.shape[1]):
         reg = LinearRegression()
         reg.fit(
             X_centered.numpy(),
-            y[:, i].numpy(),
+            y[:, j].numpy(),
             sample_weight=weights
         )
-        # Predict at X = 0 (i.e., s = s_obs)
+        # Predict at X = 0 (i.e., centered around obs_stats)
         y_pred = reg.predict(X_centered.numpy())
-
-        # Adjustment
-        adjusted = y[:, i].numpy() - (y_pred - reg.intercept_)
+        adjusted = y[:, j].numpy() - (y_pred - reg.intercept_)
         adjusted_params.append(adjusted)
 
-    # Stack and return mean adjusted posterior
-    adjusted_params = [i.tolist() for i in adjusted_params]
-    adjusted_tensor = torch.tensor(adjusted_params).T
+    # Convert to numpy array first, then tensor
+    adjusted_array = np.stack(adjusted_params, axis=1)  # shape (k, p)
+    adjusted_tensor = torch.from_numpy(adjusted_array)
     return adjusted_tensor.mean(dim=0)
 
 
@@ -239,7 +250,8 @@ def run_abc_for_index(
             sim_stats=obs_all,
             sim_params=params_all,
             distance_fn=distance_fn,
-            quantile=quantile
+            quantile=quantile,
+            exclude_idx=i
         )
     except Exception as e:
         logger.error(f"ABC failed for idx={i}: {e}")
