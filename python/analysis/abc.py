@@ -175,6 +175,11 @@ def abc_regression_adjustment(
     distances = torch.tensor([
         distance_fn(obs_stats, sim) for sim in sim_stats_masked
     ])
+
+    k = int(len(distances) * quantile)
+    if k == 0:
+        raise ValueError(f"No samples accepted for obs index {exclude_idx}")
+
     closest_indices = torch.topk(distances, k=k, largest=False).indices
 
     X = sim_stats_masked[closest_indices]   # shape (k, features)
@@ -187,6 +192,12 @@ def abc_regression_adjustment(
     # Step 3: Compute Epanechnikov kernel weights
     delta = dists.max().item()
     weights = epanechnikov_kernel(dists.numpy(), delta=delta)  # shape (k,)
+
+    if np.sum(weights) == 0:
+        raise ValueError(
+            f"All kernel weights are zero for obs index {exclude_idx}. "
+            f"Try increasing --quantile."
+        )
 
     # Step 4: Local-linear regression for each parameter
     adjusted_params = []
@@ -254,7 +265,7 @@ def run_abc_for_index(
             exclude_idx=i
         )
     except Exception as e:
-        logger.error(f"ABC failed for idx={i}: {e}")
+        logger.warning(f"ABC failed for idx={i}: {e}")
         return None
 
     result = {
@@ -271,7 +282,10 @@ def run_abc_for_index(
     return result
 
 
-def compute_mae(df: pd.DataFrame, param_names: list[str]) -> pd.Series:
+def compute_mae(
+    df: pd.DataFrame,
+    param_names: list[str]
+) -> pd.Series:
     """
     Compute the mean absolute error (MAE) between true and posterior estimates.
 
@@ -417,7 +431,7 @@ def run_abc(
 
     if n_jobs > (n_cores := cpu_count()):
         raise RuntimeError(
-            f"Too many jobs submitted: {n_jobs} > available CPU cores: {n_cores}"
+            f"Too many jobs: {n_jobs} > available CPU cores: {n_cores}"
         )
     logger.info(
         f"Starting jobs on {n_cores} cores. This may take a while..."
@@ -427,6 +441,12 @@ def run_abc(
         results = list(executor.map(abc_task, indices))
 
     df = pd.DataFrame([r for r in results if r is not None])
+
+    if df.empty:
+        raise ValueError(
+            "No ABC results available: all samples may have failed. "
+            "Try increasing --quantile."
+        )
 
     if not output_path.exists():
         logger.info(f"Making directory: {output_path}")
