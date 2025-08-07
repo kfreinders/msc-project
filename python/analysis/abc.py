@@ -390,10 +390,12 @@ def run_abc(
 
     # Load precomputed summary stats and parameters
     logger.info(f"Loading data splits from {splits_path}")
+    train_split = NosoiSplit.load("train", splits_path)
+    val_split = NosoiSplit.load("val", splits_path)
     test_split = NosoiSplit.load("test", splits_path)
 
-    X_all = test_split.X.numpy()
-    y_all = test_split.y.numpy()
+    X_all = torch.cat((train_split.X, val_split.X, test_split.X)).numpy()
+    y_all = torch.cat((train_split.y, val_split.y, test_split.y)).numpy()
 
     # Randomly select a sample of pseudo-observations to condition on
     rng = np.random.default_rng(seed=seed)
