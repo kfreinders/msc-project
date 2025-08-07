@@ -83,23 +83,23 @@ def sample_parameters(
     return {k: f(rng) for k, f in priors.items()}
 
 
-def euclidean_distance(obs: torch.Tensor, sim: torch.Tensor) -> float:
+def euclidean_distance(obs: np.ndarray, sim: np.ndarray) -> float:
     """
     Compute the Euclidean distance between two summary statistics vectors.
 
     Parameters
     ----------
-    obs : torch.Tensor
-        Observed summary statistics (1D tensor).
-    sim : torch.Tensor
-        Simulated summary statistics (1D tensor).
+    obs : np.ndarray
+        Observed summary statistics (1D array).
+    sim : np.ndarray
+        Simulated summary statistics (1D array).
 
     Returns
     -------
     float
         Euclidean distance between the two vectors.
     """
-    return float(torch.norm(obs - sim))
+    return float(np.linalg.norm(obs - sim))
 
 
 def epanechnikov_kernel(distances: np.ndarray, delta: float) -> np.ndarray:
@@ -129,23 +129,23 @@ def epanechnikov_kernel(distances: np.ndarray, delta: float) -> np.ndarray:
 
 
 def abc_regression_adjustment(
-    obs_stats: torch.Tensor,
-    sim_stats: torch.Tensor,
-    sim_params: torch.Tensor,
-    distance_fn: Callable[[torch.Tensor, torch.Tensor], float],
+    obs_stats: np.ndarray,
+    sim_stats: np.ndarray,
+    sim_params: np.ndarray,
+    distance_fn: Callable[[np.ndarray, np.ndarray], float],
     quantile: float = 0.01,
-) -> torch.Tensor:
+) -> np.ndarray:
     """
     Perform ABC with regression adjustment.
 
     Parameters
     ----------
-    obs_stats : torch.Tensor
-        1D tensor of observed summary statistics.
-    sim_stats : torch.Tensor
-        2D tensor of all simulated summary statistics.
-    sim_params : torch.Tensor
-        2D tensor of all true parameters corresponding to sim_stats.
+    obs_stats : np.ndarray
+        1D array of observed summary statistics.
+    sim_stats : np.ndarray
+        2D array of all simulated summary statistics.
+    sim_params : np.ndarray
+        2D array of all true parameters corresponding to sim_stats.
     distance_fn : Callable
         Function to compute distance between summary statistics.
     quantile : float
@@ -154,11 +154,11 @@ def abc_regression_adjustment(
 
     Returns
     -------
-    torch.Tensor
+    np.ndarray
         Posterior mean estimate after regression adjustment.
     """
     # Step 1: compute distances
-    distances = torch.tensor([
+    distances = np.array([
         distance_fn(obs_stats, sim) for sim in sim_stats
     ])
 
@@ -166,7 +166,7 @@ def abc_regression_adjustment(
     if k == 0:
         raise ValueError("No samples accepted")
 
-    closest_indices = torch.topk(distances, k=k, largest=False).indices
+    closest_indices = np.argpartition(distances, k)[:k]
 
     X = sim_stats[closest_indices]      # shape (k, features)
     y = sim_params[closest_indices]     # shape (k, parameters)
@@ -176,8 +176,8 @@ def abc_regression_adjustment(
     X_centered = X - obs_stats
 
     # Step 3: Compute Epanechnikov kernel weights
-    delta = dists.max().item()
-    weights = epanechnikov_kernel(dists.numpy(), delta=delta)  # shape (k,)
+    delta = dists.max()
+    weights = epanechnikov_kernel(dists, delta=delta)  # shape (k,)
 
     if np.sum(weights) == 0:
         raise ValueError(
@@ -188,29 +188,23 @@ def abc_regression_adjustment(
     adjusted_params = []
     for j in range(y.shape[1]):
         reg = LinearRegression()
-        reg.fit(
-            X_centered.numpy(),
-            y[:, j].numpy(),
-            sample_weight=weights
-        )
+        reg.fit(X_centered, y[:, j], sample_weight=weights)
         # Predict at X = 0 (i.e., centered around obs_stats)
-        y_pred = reg.predict(X_centered.numpy())
-        adjusted = y[:, j].numpy() - (y_pred - reg.intercept_)
+        y_pred = reg.predict(X_centered)
+        adjusted = y[:, j] - (y_pred - reg.intercept_)
         adjusted_params.append(adjusted)
 
-    # Convert to numpy array first, then tensor
     adjusted_array = np.stack(adjusted_params, axis=1)  # shape (k, p)
-    adjusted_tensor = torch.from_numpy(adjusted_array)
-    return adjusted_tensor.mean(dim=0)
+    return adjusted_array.mean(axis=0)
 
 
 def run_abc_for_index(
     i: int,
-    obs_all: torch.Tensor,
-    params_all: torch.Tensor,
+    obs_all: np.ndarray,
+    params_all: np.ndarray,
     param_names: list[str],
     quantile: float = 0.01,
-    distance_fn: Callable[[torch.Tensor, torch.Tensor], float] = euclidean_distance,
+    distance_fn: Callable[[np.ndarray, np.ndarray], float] = euclidean_distance,
     n_samples: int = 1_000,
     seed: int = 42
 ) -> dict | None:
@@ -221,10 +215,10 @@ def run_abc_for_index(
     ----------
     i : int
         Index of the pseudo-observation to use.
-    obs_all : torch.Tensor
-        Tensor of all simulated summary statistics.
-    params_all : torch.Tensor
-        Tensor of true simulation parameters.
+    obs_all : np.ndarray
+        Array of all simulated summary statistics.
+    params_all : np.ndarray
+        Array of true simulation parameters.
     param_names : list[str]
         Parameter names (used to construct true/post keys).
     quantile : float
@@ -398,8 +392,8 @@ def run_abc(
     logger.info(f"Loading data splits from {splits_path}")
     test_split = NosoiSplit.load("test", splits_path)
 
-    X_all = test_split.X
-    y_all = test_split.y
+    X_all = test_split.X.numpy()
+    y_all = test_split.y.numpy()
 
     # Randomly select a sample of pseudo-observations to condition on
     rng = np.random.default_rng(seed=seed)
