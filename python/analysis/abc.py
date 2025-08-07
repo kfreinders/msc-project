@@ -134,7 +134,6 @@ def abc_regression_adjustment(
     sim_params: torch.Tensor,
     distance_fn: Callable[[torch.Tensor, torch.Tensor], float],
     quantile: float = 0.01,
-    exclude_idx: int | None = None
 ) -> torch.Tensor:
     """
     Perform ABC with regression adjustment.
@@ -152,39 +151,26 @@ def abc_regression_adjustment(
     quantile : float
         Proportion of simulations to keep (e.g. 0.01 keeps 1% closest samples).
         Default is 0.01.
-    exclude_idx : int, optional
-        Index of the observation to exclude from the candidate pool
-        (to avoid data leakage). Default is None.
 
     Returns
     -------
     torch.Tensor
         Posterior mean estimate after regression adjustment.
     """
-    # Build mask to exclude the observed sample
-    if exclude_idx is not None:
-        mask = torch.ones(len(sim_stats), dtype=torch.bool)
-        mask[exclude_idx] = False
-        sim_stats_masked = sim_stats[mask]
-        sim_params_masked = sim_params[mask]
-    else:
-        sim_stats_masked = sim_stats
-        sim_params_masked = sim_params
-
     # Step 1: compute distances
     distances = torch.tensor([
-        distance_fn(obs_stats, sim) for sim in sim_stats_masked
+        distance_fn(obs_stats, sim) for sim in sim_stats
     ])
 
     k = int(len(distances) * quantile)
     if k == 0:
-        raise ValueError(f"No samples accepted for obs index {exclude_idx}")
+        raise ValueError("No samples accepted")
 
     closest_indices = torch.topk(distances, k=k, largest=False).indices
 
-    X = sim_stats_masked[closest_indices]   # shape (k, features)
-    y = sim_params_masked[closest_indices]  # shape (k, parameters)
-    dists = distances[closest_indices]      # shape (k)
+    X = sim_stats[closest_indices]      # shape (k, features)
+    y = sim_params[closest_indices]     # shape (k, parameters)
+    dists = distances[closest_indices]  # shape (k)
 
     # Step 2: center summary statistics around the observation
     X_centered = X - obs_stats
@@ -195,8 +181,7 @@ def abc_regression_adjustment(
 
     if np.sum(weights) == 0:
         raise ValueError(
-            f"All kernel weights are zero for obs index {exclude_idx}. "
-            f"Try increasing --quantile."
+            "All kernel weights are zero. Try increasing --quantile."
         )
 
     # Step 4: Local-linear regression for each parameter
@@ -225,7 +210,9 @@ def run_abc_for_index(
     params_all: torch.Tensor,
     param_names: list[str],
     quantile: float = 0.01,
-    distance_fn: Callable[[torch.Tensor, torch.Tensor], float] = euclidean_distance
+    distance_fn: Callable[[torch.Tensor, torch.Tensor], float] = euclidean_distance,
+    n_samples: int = 1_000,
+    seed: int = 42
 ) -> dict | None:
     """
     Run ABC with regression adjustment for a single pseudo-observation index.
@@ -244,6 +231,10 @@ def run_abc_for_index(
         Proportion of closest simulations to keep (default 0.01).
     distance_fn : Callable
         Distance function to compare summary statistics.
+    n_samples : int
+       Number of simulations to draw in each ABC run.
+    seed: int
+        Seed for making runs reproducable.
 
     Returns
     -------
@@ -253,16 +244,25 @@ def run_abc_for_index(
     # Set up logger
     logger = logging.getLogger(__name__)
 
-    obs_stats = obs_all[i]
+    rng = np.random.default_rng(seed + i)
+    all_indices = np.arange(len(obs_all))
+    if i in all_indices:
+        all_indices = np.delete(all_indices, i)  # Exclude observation
+    if n_samples >= len(all_indices):
+        candidate_indices = all_indices
+    else:
+        candidate_indices = rng.choice(all_indices, size=n_samples, replace=False)
+
+    sim_stats_sampled = obs_all[candidate_indices]
+    sim_params_sampled = params_all[candidate_indices]
 
     try:
         adjusted_mean = abc_regression_adjustment(
-            obs_stats=obs_stats,
-            sim_stats=obs_all,
-            sim_params=params_all,
+            obs_stats=obs_all[i],
+            sim_stats=sim_stats_sampled,
+            sim_params=sim_params_sampled,
             distance_fn=distance_fn,
             quantile=quantile,
-            exclude_idx=i
         )
     except Exception as e:
         logger.warning(f"ABC failed for idx={i}: {e}")
@@ -359,6 +359,7 @@ def plot_errors(
 def run_abc(
     splits_path: Path,
     n_runs: int,
+    n_samples: int,
     quantile: float,
     output_path: Path,
     seed: int,
@@ -378,6 +379,8 @@ def run_abc(
         Path to the directory containing the pickled `NosoiSplit` test split.
     n_runs : int
         Number of pseudo-observations to sample and infer from.
+    n_samples: int
+       Number of simulations to draw from the test set in each ABC run.
     quantile : float
         Proportion of closest simulations to retain for ABC adjustment
         (e.g. 0.01).
@@ -395,12 +398,15 @@ def run_abc(
     logger.info(f"Loading data splits from {splits_path}")
     test_split = NosoiSplit.load("test", splits_path)
 
+    X_all = test_split.X
+    y_all = test_split.y
+
     # Randomly select a sample of pseudo-observations to condition on
     rng = np.random.default_rng(seed=seed)
-    indices = rng.choice(len(test_split.X), size=n_runs, replace=False)
+    indices = rng.choice(len(X_all), size=n_runs, replace=False)
 
     logger.info(
-        f"Randomly selecting {n_runs:_} samples from test dataset"
+        f"Randomly selecting {n_runs:_} samples"
     )
     if seed:
         logger.info(f"seed={seed}")
@@ -415,10 +421,12 @@ def run_abc(
     # Use partial to fix all shared arguments
     abc_task = partial(
         run_abc_for_index,
-        obs_all=test_split.X,
-        params_all=test_split.y,
+        obs_all=X_all,
+        params_all=y_all,
         param_names=param_names,
-        quantile=quantile
+        quantile=quantile,
+        n_samples=n_samples,
+        seed=seed
     )
 
     n_cores = cpu_count() if n_runs >= cpu_count() else n_runs
@@ -467,11 +475,15 @@ def cli_main():
 
     parser.add_argument(
         "--splits-path", type=str, default="data/splits/scarce_0.00",
-        help="Path to the directory containing pickled NosoiSplit object."
+        help="Path to the directory containing pickled NosoiSplit objects."
     )
     parser.add_argument(
         "--n-runs", type=int, default=10_000,
         help="Number of pseudo-observations to sample."
+    )
+    parser.add_argument(
+        "--n-samples", type=int, default=1_000,
+        help="Number of simulations to draw in each ABC run."
     )
     parser.add_argument(
         "--quantile", type=float, default=0.01,
@@ -494,6 +506,7 @@ def cli_main():
     run_abc(
         splits_path=Path(args.splits_path),
         n_runs=args.n_runs,
+        n_samples=args.n_samples,
         quantile=args.quantile,
         output_path=Path(args.output_path),
         seed=args.seed,
