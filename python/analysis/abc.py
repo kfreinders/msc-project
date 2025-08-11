@@ -110,46 +110,37 @@ def abc_regression_adjustment(
         Posterior mean estimate after regression adjustment.
     """
     # Step 1: compute distances
-    diffs = sim_stats - obs_stats  # (n, f)
-    distances = np.linalg.norm(diffs, axis=1)  # (n,)
+    diffs = sim_stats - obs_stats               # (n, f)
+    distances = np.linalg.norm(diffs, axis=1)   # (n,  )
 
     k = int(len(distances) * quantile)
     if k == 0:
         raise ValueError("No samples accepted")
 
-    closest_indices = np.argpartition(distances, k)[:k]
+    # Step 2: Select k-closest via partial sort
+    idx = np.argpartition(distances, k)[:k]
+    Xc = diffs[idx]                             # centered features (k, f)
+    y = sim_params[idx]                         # parameters (k, p)
+    d = distances[idx]                          # distances (k,)
 
-    X = sim_stats[closest_indices]   # shape (k, features)
-    y = sim_params[closest_indices]  # shape (k, parameters)
-    d = distances[closest_indices]   # shape (k)
-
-    # Step 2: center summary statistics around the observation
-    X_centered = X - obs_stats
-
-    # Step 3: Compute Epanechnikov kernel weights
+    # Step 3: compute Epanechnikov kernel weights
     delta = d.max()
     if delta == 0:
-        # All selected sims exactly match obs_stats → just average y
+        # If all selected sims exactly match obs_stats then just average y
         return y.mean(axis=0)
-
-    # 3) Epanechnikov weights inline
     weights = 1.0 - (d / delta) ** 2
     weights[weights < 0] = 0.0
     if weights.sum() == 0:
         raise ValueError("All kernel weights are zero. Increase quantile.")
 
-    # Step 4: Local-linear regression for each parameter
-    adjusted_params = []
-    for j in range(y.shape[1]):
-        reg = LinearRegression()
-        reg.fit(X_centered, y[:, j], sample_weight=weights)
-        # Predict at X = 0 (i.e., centered around obs_stats)
-        y_pred = reg.predict(X_centered)
-        adjusted = y[:, j] - (y_pred - reg.intercept_)
-        adjusted_params.append(adjusted)
+    # Step 4: local-linear regression for each parameter
+    reg = LinearRegression()
+    reg.fit(Xc, y, sample_weight=weights)
 
-    adjusted_array = np.stack(adjusted_params, axis=1)  # shape (k, p)
-    return adjusted_array.mean(axis=0)
+    # Step 5: adjustment y_adj = y - (Xc @ coef.T)
+    # Predict at 0 equals reg.intercept_, so subtract slope contribution only
+    y_adj = y - Xc @ reg.coef_.T
+    return y_adj.mean(axis=0)
 
 
 def run_abc_for_index(
