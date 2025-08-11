@@ -83,25 +83,6 @@ def sample_parameters(
     return {k: f(rng) for k, f in priors.items()}
 
 
-def euclidean_distance(obs: np.ndarray, sim: np.ndarray) -> float:
-    """
-    Compute the Euclidean distance between two summary statistics vectors.
-
-    Parameters
-    ----------
-    obs : np.ndarray
-        Observed summary statistics (1D array).
-    sim : np.ndarray
-        Simulated summary statistics (1D array).
-
-    Returns
-    -------
-    float
-        Euclidean distance between the two vectors.
-    """
-    return float(np.linalg.norm(obs - sim))
-
-
 def epanechnikov_kernel(distances: np.ndarray, delta: float) -> np.ndarray:
     """
     Compute Epanechnikov kernel weights for a set of distances.
@@ -132,7 +113,6 @@ def abc_regression_adjustment(
     obs_stats: np.ndarray,
     sim_stats: np.ndarray,
     sim_params: np.ndarray,
-    distance_fn: Callable[[np.ndarray, np.ndarray], float],
     quantile: float = 0.01,
 ) -> np.ndarray:
     """
@@ -146,8 +126,6 @@ def abc_regression_adjustment(
         2D array of all simulated summary statistics.
     sim_params : np.ndarray
         2D array of all true parameters corresponding to sim_stats.
-    distance_fn : Callable
-        Function to compute distance between summary statistics.
     quantile : float
         Proportion of simulations to keep (e.g. 0.01 keeps 1% closest samples).
         Default is 0.01.
@@ -158,9 +136,8 @@ def abc_regression_adjustment(
         Posterior mean estimate after regression adjustment.
     """
     # Step 1: compute distances
-    distances = np.array([
-        distance_fn(obs_stats, sim) for sim in sim_stats
-    ])
+    diffs = sim_stats - obs_stats  # (n, f)
+    distances = np.linalg.norm(diffs, axis=1)  # (n,)
 
     k = int(len(distances) * quantile)
     if k == 0:
@@ -204,7 +181,6 @@ def run_abc_for_index(
     params_all: np.ndarray,
     param_names: list[str],
     quantile: float = 0.01,
-    distance_fn: Callable[[np.ndarray, np.ndarray], float] = euclidean_distance,
     n_samples: int = 1_000,
     seed: int = 42
 ) -> dict | None:
@@ -223,8 +199,6 @@ def run_abc_for_index(
         Parameter names (used to construct true/post keys).
     quantile : float
         Proportion of closest simulations to keep (default 0.01).
-    distance_fn : Callable
-        Distance function to compare summary statistics.
     n_samples : int
        Number of simulations to draw in each ABC run.
     seed: int
@@ -255,7 +229,6 @@ def run_abc_for_index(
             obs_stats=obs_all[i],
             sim_stats=sim_stats_sampled,
             sim_params=sim_params_sampled,
-            distance_fn=distance_fn,
             quantile=quantile,
         )
     except Exception as e:
