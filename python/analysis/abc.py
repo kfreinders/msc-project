@@ -437,7 +437,7 @@ def cli_main():
         help="Random seed for reproducibility."
     )
     parser.add_argument(
-        "--make_plots", type=bool, default=False,
+        "--make_plots", action="store_true",
         help="Make and export prediction error distribution plots."
     )
 
