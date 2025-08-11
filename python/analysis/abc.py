@@ -182,12 +182,18 @@ def run_abc_for_index(
 
     rng = np.random.default_rng(seed + i)
     all_indices = np.arange(len(obs_all))
+
+    # Exclude the observation itself if present
     if i in all_indices:
-        all_indices = np.delete(all_indices, i)  # Exclude observation
+        all_indices = np.delete(all_indices, i)
+
+    # Subsample candidates
     if n_samples >= len(all_indices):
         candidate_indices = all_indices
     else:
-        candidate_indices = rng.choice(all_indices, size=n_samples, replace=False)
+        candidate_indices = rng.choice(
+            all_indices, size=n_samples, replace=False
+        )
 
     sim_stats_sampled = obs_all[candidate_indices]
     sim_params_sampled = params_all[candidate_indices]
@@ -203,18 +209,14 @@ def run_abc_for_index(
         logger.warning(f"ABC failed for idx={i}: {e}")
         return None
 
-    result = {
+    return {
         "idx": i,
         "quantile": quantile,
+        **{f"true_{n}": v.item() if hasattr(v, "item") else float(v)
+           for n, v in zip(param_names, params_all[i])},
+        **{f"post_{n}": v.item() if hasattr(v, "item") else float(v)
+           for n, v in zip(param_names, adjusted_mean)},
     }
-
-    for name, value in zip([f"true_{n}" for n in param_names], params_all[i]):
-        result[name] = value.item()
-
-    for name, value in zip([f"post_{n}" for n in param_names], adjusted_mean):
-        result[name] = value.item()
-
-    return result
 
 
 def compute_mae(
