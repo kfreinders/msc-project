@@ -83,32 +83,6 @@ def sample_parameters(
     return {k: f(rng) for k, f in priors.items()}
 
 
-def epanechnikov_kernel(distances: np.ndarray, delta: float) -> np.ndarray:
-    """
-    Compute Epanechnikov kernel weights for a set of distances.
-
-    Parameters
-    ----------
-    distances : np.ndarray
-        1D array of distances between observed and simulated summary
-        statistics.
-    delta : float
-        Bandwidth (maximum distance in accepted subset).
-
-    Returns
-    -------
-    np.ndarray
-        Kernel weights of the same shape as `distances`.
-    """
-    scaled = distances / delta
-    weights = np.where(
-        distances <= delta,
-        (1 - scaled**2),
-        0.0
-    )
-    return weights
-
-
 def abc_regression_adjustment(
     obs_stats: np.ndarray,
     sim_stats: np.ndarray,
@@ -145,21 +119,24 @@ def abc_regression_adjustment(
 
     closest_indices = np.argpartition(distances, k)[:k]
 
-    X = sim_stats[closest_indices]      # shape (k, features)
-    y = sim_params[closest_indices]     # shape (k, parameters)
-    dists = distances[closest_indices]  # shape (k)
+    X = sim_stats[closest_indices]   # shape (k, features)
+    y = sim_params[closest_indices]  # shape (k, parameters)
+    d = distances[closest_indices]   # shape (k)
 
     # Step 2: center summary statistics around the observation
     X_centered = X - obs_stats
 
     # Step 3: Compute Epanechnikov kernel weights
-    delta = dists.max()
-    weights = epanechnikov_kernel(dists, delta=delta)  # shape (k,)
+    delta = d.max()
+    if delta == 0:
+        # All selected sims exactly match obs_stats → just average y
+        return y.mean(axis=0)
 
-    if np.sum(weights) == 0:
-        raise ValueError(
-            "All kernel weights are zero. Try increasing --quantile."
-        )
+    # 3) Epanechnikov weights inline
+    weights = 1.0 - (d / delta) ** 2
+    weights[weights < 0] = 0.0
+    if weights.sum() == 0:
+        raise ValueError("All kernel weights are zero. Increase quantile.")
 
     # Step 4: Local-linear regression for each parameter
     adjusted_params = []
