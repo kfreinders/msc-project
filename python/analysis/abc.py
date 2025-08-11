@@ -83,56 +83,10 @@ def sample_parameters(
     return {k: f(rng) for k, f in priors.items()}
 
 
-def euclidean_distance(obs: np.ndarray, sim: np.ndarray) -> float:
-    """
-    Compute the Euclidean distance between two summary statistics vectors.
-
-    Parameters
-    ----------
-    obs : np.ndarray
-        Observed summary statistics (1D array).
-    sim : np.ndarray
-        Simulated summary statistics (1D array).
-
-    Returns
-    -------
-    float
-        Euclidean distance between the two vectors.
-    """
-    return float(np.linalg.norm(obs - sim))
-
-
-def epanechnikov_kernel(distances: np.ndarray, delta: float) -> np.ndarray:
-    """
-    Compute Epanechnikov kernel weights for a set of distances.
-
-    Parameters
-    ----------
-    distances : np.ndarray
-        1D array of distances between observed and simulated summary
-        statistics.
-    delta : float
-        Bandwidth (maximum distance in accepted subset).
-
-    Returns
-    -------
-    np.ndarray
-        Kernel weights of the same shape as `distances`.
-    """
-    scaled = distances / delta
-    weights = np.where(
-        distances <= delta,
-        (1 - scaled**2),
-        0.0
-    )
-    return weights
-
-
 def abc_regression_adjustment(
     obs_stats: np.ndarray,
     sim_stats: np.ndarray,
     sim_params: np.ndarray,
-    distance_fn: Callable[[np.ndarray, np.ndarray], float],
     quantile: float = 0.01,
 ) -> np.ndarray:
     """
@@ -146,8 +100,6 @@ def abc_regression_adjustment(
         2D array of all simulated summary statistics.
     sim_params : np.ndarray
         2D array of all true parameters corresponding to sim_stats.
-    distance_fn : Callable
-        Function to compute distance between summary statistics.
     quantile : float
         Proportion of simulations to keep (e.g. 0.01 keeps 1% closest samples).
         Default is 0.01.
@@ -158,44 +110,37 @@ def abc_regression_adjustment(
         Posterior mean estimate after regression adjustment.
     """
     # Step 1: compute distances
-    distances = np.array([
-        distance_fn(obs_stats, sim) for sim in sim_stats
-    ])
+    diffs = sim_stats - obs_stats               # (n, f)
+    distances = np.linalg.norm(diffs, axis=1)   # (n,  )
 
     k = int(len(distances) * quantile)
     if k == 0:
         raise ValueError("No samples accepted")
 
-    closest_indices = np.argpartition(distances, k)[:k]
+    # Step 2: Select k-closest via partial sort
+    idx = np.argpartition(distances, k)[:k]
+    Xc = diffs[idx]                             # centered features (k, f)
+    y = sim_params[idx]                         # parameters (k, p)
+    d = distances[idx]                          # distances (k,)
 
-    X = sim_stats[closest_indices]      # shape (k, features)
-    y = sim_params[closest_indices]     # shape (k, parameters)
-    dists = distances[closest_indices]  # shape (k)
+    # Step 3: compute Epanechnikov kernel weights
+    delta = d.max()
+    if delta == 0:
+        # If all selected sims exactly match obs_stats then just average y
+        return y.mean(axis=0)
+    weights = 1.0 - (d / delta) ** 2
+    weights[weights < 0] = 0.0
+    if weights.sum() == 0:
+        raise ValueError("All kernel weights are zero. Increase quantile.")
 
-    # Step 2: center summary statistics around the observation
-    X_centered = X - obs_stats
+    # Step 4: local-linear regression for each parameter
+    reg = LinearRegression()
+    reg.fit(Xc, y, sample_weight=weights)
 
-    # Step 3: Compute Epanechnikov kernel weights
-    delta = dists.max()
-    weights = epanechnikov_kernel(dists, delta=delta)  # shape (k,)
-
-    if np.sum(weights) == 0:
-        raise ValueError(
-            "All kernel weights are zero. Try increasing --quantile."
-        )
-
-    # Step 4: Local-linear regression for each parameter
-    adjusted_params = []
-    for j in range(y.shape[1]):
-        reg = LinearRegression()
-        reg.fit(X_centered, y[:, j], sample_weight=weights)
-        # Predict at X = 0 (i.e., centered around obs_stats)
-        y_pred = reg.predict(X_centered)
-        adjusted = y[:, j] - (y_pred - reg.intercept_)
-        adjusted_params.append(adjusted)
-
-    adjusted_array = np.stack(adjusted_params, axis=1)  # shape (k, p)
-    return adjusted_array.mean(axis=0)
+    # Step 5: adjustment y_adj = y - (Xc @ coef.T)
+    # Predict at 0 equals reg.intercept_, so subtract slope contribution only
+    y_adj = y - Xc @ reg.coef_.T
+    return y_adj.mean(axis=0)
 
 
 def run_abc_for_index(
@@ -204,7 +149,6 @@ def run_abc_for_index(
     params_all: np.ndarray,
     param_names: list[str],
     quantile: float = 0.01,
-    distance_fn: Callable[[np.ndarray, np.ndarray], float] = euclidean_distance,
     n_samples: int = 1_000,
     seed: int = 42
 ) -> dict | None:
@@ -223,8 +167,6 @@ def run_abc_for_index(
         Parameter names (used to construct true/post keys).
     quantile : float
         Proportion of closest simulations to keep (default 0.01).
-    distance_fn : Callable
-        Distance function to compare summary statistics.
     n_samples : int
        Number of simulations to draw in each ABC run.
     seed: int
@@ -240,12 +182,18 @@ def run_abc_for_index(
 
     rng = np.random.default_rng(seed + i)
     all_indices = np.arange(len(obs_all))
+
+    # Exclude the observation itself if present
     if i in all_indices:
-        all_indices = np.delete(all_indices, i)  # Exclude observation
+        all_indices = np.delete(all_indices, i)
+
+    # Subsample candidates
     if n_samples >= len(all_indices):
         candidate_indices = all_indices
     else:
-        candidate_indices = rng.choice(all_indices, size=n_samples, replace=False)
+        candidate_indices = rng.choice(
+            all_indices, size=n_samples, replace=False
+        )
 
     sim_stats_sampled = obs_all[candidate_indices]
     sim_params_sampled = params_all[candidate_indices]
@@ -255,25 +203,20 @@ def run_abc_for_index(
             obs_stats=obs_all[i],
             sim_stats=sim_stats_sampled,
             sim_params=sim_params_sampled,
-            distance_fn=distance_fn,
             quantile=quantile,
         )
     except Exception as e:
         logger.warning(f"ABC failed for idx={i}: {e}")
         return None
 
-    result = {
+    return {
         "idx": i,
         "quantile": quantile,
+        **{f"true_{n}": v.item() if hasattr(v, "item") else float(v)
+           for n, v in zip(param_names, params_all[i])},
+        **{f"post_{n}": v.item() if hasattr(v, "item") else float(v)
+           for n, v in zip(param_names, adjusted_mean)},
     }
-
-    for name, value in zip([f"true_{n}" for n in param_names], params_all[i]):
-        result[name] = value.item()
-
-    for name, value in zip([f"post_{n}" for n in param_names], adjusted_mean):
-        result[name] = value.item()
-
-    return result
 
 
 def compute_mae(
@@ -494,7 +437,7 @@ def cli_main():
         help="Random seed for reproducibility."
     )
     parser.add_argument(
-        "--make_plots", type=bool, default=False,
+        "--make_plots", action="store_true",
         help="Make and export prediction error distribution plots."
     )
 
