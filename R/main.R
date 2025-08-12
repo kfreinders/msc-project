@@ -23,10 +23,10 @@ suppressPackageStartupMessages({
 })
 
 #------------------------------------------------------------------------------#
-#    LOAD DEFAULTS (config.R)                                                  #
+#    IMPORTS                                                                   #
 #------------------------------------------------------------------------------#
 
-source("R/config.R")               # provides nosoi_settings, param_bounds, and path vars
+source("R/defaults.R")
 source("R/sample_parameters.R")
 source("R/nosoi_sim.R")
 source("R/run_nosoi_parallel.R")
@@ -62,34 +62,42 @@ parser$add_argument("--p-fatal", help = "Range e.g. 0.01,0.5")
 parser$add_argument("--mean-t-recovery", help = "Range e.g. 10,30")
 
 # Paths
-parser$add_argument("--out", dest = "output_folder", help = "Output folder (default from config.R)")
+parser$add_argument("--out", dest = "output_folder", help = "Output folder (default from defaults.R)")
 parser$add_argument("--paramsets-file", help = "Path to master.csv")
 parser$add_argument("--paramsets-plot-file", help = "Path to parameter_distributions.pdf")
-parser$add_argument("--parquet-file", help = "Path to nosoi_inftables.parquet")
 
 args <- parser$parse_args()
 
-# Apply overrides to nosoi_settings
-nosoi_settings$n_sim            <- args$n_sim            %||% nosoi_settings$n_sim
-nosoi_settings$length           <- args$length           %||% nosoi_settings$length
-nosoi_settings$max_infected     <- args$max_infected     %||% nosoi_settings$max_infected
-nosoi_settings$init_individuals <- args$init_individuals %||% nosoi_settings$init_individuals
+#------------------------------------------------------------------------------#
+#    BUILD CONTEXT                                                             #
+#------------------------------------------------------------------------------#
 
-# Apply overrides to param_bounds
-if (!is.null(args$mean_t_incub))    param_bounds$mean_t_incub    <- parse_range(args$mean_t_incub,    "mean-t-incub")
-if (!is.null(args$stdv_t_incub))    param_bounds$stdv_t_incub    <- parse_range(args$stdv_t_incub,    "stdv-t-incub")
-if (!is.null(args$mean_ncontact))   param_bounds$mean_nContact   <- parse_range(args$mean_ncontact,   "mean-ncontact")
-if (!is.null(args$p_trans))         param_bounds$p_trans         <- parse_range(args$p_trans,         "p-trans")
-if (!is.null(args$p_fatal))         param_bounds$p_fatal         <- parse_range(args$p_fatal,         "p-fatal")
-if (!is.null(args$mean_t_recovery)) param_bounds$mean_t_recovery <- parse_range(args$mean_t_recovery, "mean-t-recovery")
+config <- defaults
 
-# Apply overrides to paths
-output_folder       <- args$output_folder       %||% output_folder
-paramsets_file      <- args$paramsets_file      %||% paramsets_file
-paramsets_plot_file <- args$paramsets_plot_file %||% paramsets_plot_file
-parquet_file        <- args$parquet_file        %||% parquet_file
+# overrides: nosoi_settings
+config$nosoi_settings$n_sim            <- args$n_sim            %||% config$nosoi_settings$n_sim
+config$nosoi_settings$length           <- args$length           %||% config$nosoi_settings$length
+config$nosoi_settings$max_infected     <- args$max_infected     %||% config$nosoi_settings$max_infected
+config$nosoi_settings$init_individuals <- args$init_individuals %||% config$nosoi_settings$init_individuals
 
-if (!dir.exists(output_folder)) dir.create(output_folder, recursive = TRUE, showWarnings = FALSE)
+# overrides: param_bounds
+if (!is.null(args$mean_t_incub))    config$param_bounds$mean_t_incub    <- parse_range(args$mean_t_incub,    "mean-t-incub")
+if (!is.null(args$stdv_t_incub))    config$param_bounds$stdv_t_incub    <- parse_range(args$stdv_t_incub,    "stdv-t-incub")
+if (!is.null(args$mean_ncontact))   config$param_bounds$mean_nContact   <- parse_range(args$mean_ncontact,   "mean-ncontact")
+if (!is.null(args$p_trans))         config$param_bounds$p_trans         <- parse_range(args$p_trans,         "p-trans")
+if (!is.null(args$p_fatal))         config$param_bounds$p_fatal         <- parse_range(args$p_fatal,         "p-fatal")
+if (!is.null(args$mean_t_recovery)) config$param_bounds$mean_t_recovery <- parse_range(args$mean_t_recovery, "mean-t-recovery")
+
+# overrides: paths
+config$paths$output_folder       <- args$output_folder       %||% config$paths$output_folder
+config$paths$paramsets_file      <- args$paramsets_file      %||% config$paths$paramsets_file
+config$paths$paramsets_plot_file <- args$paramsets_plot_file %||% config$paths$paramsets_plot_file
+
+if (!dir.exists(config$paths$output_folder)) {
+  dir.create(config$paths$output_folder, recursive = TRUE, showWarnings = FALSE)
+}
+
+if (!is.null(args$seed)) set.seed(args$seed)
 
 #------------------------------------------------------------------------------#
 #    SAMPLE PARAMETER SPACE                                                    #
@@ -98,7 +106,11 @@ if (!dir.exists(output_folder)) dir.create(output_folder, recursive = TRUE, show
 start_time <- Sys.time()
 
 df <- resume_or_generate_parameters(
-  nosoi_settings$n_sim, param_bounds, output_folder, paramsets_file, paramsets_plot_file
+  config$nosoi_settings$n_sim,
+  config$param_bounds,
+  config$paths$output_folder,
+  config$paths$paramsets_file,
+  config$paths$paramsets_plot_file
 )
 
 #------------------------------------------------------------------------------#
@@ -116,7 +128,10 @@ num_cores <- if (Sys.getenv("SLURM_CPUS_ON_NODE") != "") {
 cat(sprintf("Running simulations on %d cores with dynamic task allocation...\n\n", num_cores))
 
 mc_stats <- run_nosoi_parallel(
-  df, output_folder, num_cores, nosoi_settings
+  df,
+  config$paths$output_folder,
+  num_cores,
+  config$nosoi_settings
 )
 
 end_time <- Sys.time()
@@ -127,6 +142,10 @@ elapsed_time <- round(difftime(end_time, start_time, units = "secs"), 2)
 #------------------------------------------------------------------------------#
 
 print_run_summary(
-  df, paramsets_file, output_folder, mc_stats, elapsed_time
+  df,
+  config$paths$paramsets_file,
+  config$paths$output_folder,
+  mc_stats,
+  elapsed_time
 )
 
