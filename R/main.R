@@ -38,11 +38,19 @@ source("R/utils.R")
 
 `%||%` <- function(a, b) if (!is.null(a)) a else b
 parse_range <- function(x, name) {
-  parts <- as.numeric(strsplit(x, ",", fixed = TRUE)[[1]])
-  if (length(parts) != 2 || any(is.na(parts))) {
-    stop(sprintf("Flag --%s must be two comma-separated numbers, e.g. 2,21", name), call. = FALSE)
+  parts <- strsplit(x, ",", fixed = TRUE)[[1]]
+  parts <- trimws(parts)
+  nums  <- suppressWarnings(as.numeric(parts))
+
+  if (length(nums) == 1 && !is.na(nums[1])) {
+    return(c(nums[1], nums[1]))
   }
-  parts
+  if (length(nums) == 2 && all(!is.na(nums))) {
+    return(as.numeric(nums))
+  }
+
+  stop(sprintf("Flag --%s must be a number or two comma-separated numbers (e.g. 5  or  2,21).", name),
+       call. = FALSE)
 }
 
 parser <- ArgumentParser(prog = "nosoi-main", description = "Run nosoi simulations with CLI overrides")
@@ -54,12 +62,13 @@ parser$add_argument("--max-infected", type = "integer", help = "Max infected ind
 parser$add_argument("--init-individuals", type = "integer", help = "Initial infected individuals")
 
 # Param bounds
-parser$add_argument("--mean-t-incub", help = "Range e.g. 2,21")
-parser$add_argument("--stdv-t-incub", help = "Range e.g. 1,4")
-parser$add_argument("--mean-ncontact", help = "Range e.g. 0.1,5")
-parser$add_argument("--p-trans", help = "Range e.g. 0.01,1")
-parser$add_argument("--p-fatal", help = "Range e.g. 0.01,0.5")
-parser$add_argument("--mean-t-recovery", help = "Range e.g. 10,30")
+parser$add_argument("--mean-t-incub",    help = "Number (fixed) or range like 2,21")
+parser$add_argument("--stdv-t-incub",    help = "Number (fixed) or range like 1,4")
+parser$add_argument("--mean-ncontact",   help = "Number (fixed) or range like 0.1,5")
+parser$add_argument("--p-trans",         help = "Number (fixed) or range like 0.01,1")
+parser$add_argument("--p-fatal",         help = "Number (fixed) or range like 0.01,0.5")
+parser$add_argument("--mean-t-recovery", help = "Number (fixed) or range like 10,30")
+
 
 # Paths
 parser$add_argument("--out", dest = "output_folder", help = "Output folder")
