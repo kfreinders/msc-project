@@ -114,13 +114,23 @@ if (!is.null(args$seed)) set.seed(args$seed)
 
 start_time <- Sys.time()
 
-df <- resume_or_generate_parameters(
-  config$nosoi_settings$n_sim,
-  config$param_bounds,
-  config$paths$output_folder,
-  config$paths$paramsets_file,
-  config$paths$paramsets_plot_file
-)
+# Resume simulations by comparing existing Parquet files with the seeds in
+# `paramsets_file`, if it exists
+if (file.exists(config$paths$paramsets_file)) {
+  df <- find_remaining(
+    config$nosoi_settings$n_sim,
+    config$paths$output_folder,
+    config$paths$paramsets_file
+  )
+} else {
+  df <- generate_parameters(
+    config$nosoi_settings$n_sim,
+    config$param_bounds,
+    config$paths$output_folder,
+    config$paths$paramsets_file,
+    config$paths$paramsets_plot_file
+  )
+}
 
 #------------------------------------------------------------------------------#
 #    RUN SIMULATIONS IN PARALLEL                                               #
