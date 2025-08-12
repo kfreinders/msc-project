@@ -42,6 +42,7 @@ from functools import partial
 import json
 import logging
 from multiprocessing import cpu_count
+import os
 from pathlib import Path
 from typing import Callable, Dict
 
@@ -295,6 +296,35 @@ def plot_errors(
         )
 
 
+def pick_num_workers(n_runs: int) -> int:
+    """
+    Choose worker count based SLURM, number of jobs and available cores.
+
+    Prefers SLURM_CPUS_ON_NODE if the environental variable is defined.
+    Otherwise, it used the available cpu count minus one for stability. Always
+    capped by n_runs and floor at 1.
+
+    Parameters
+    ----------
+    n_runs : int
+        Number of ABC runs to execute.
+
+    Returns
+    -------
+    int
+        Number of cores to allocate for the script.
+    """
+    slurm_cores = os.getenv("SLURM_CPUS_ON_NODE")
+    if slurm_cores:
+        try:
+            cores = max(1, int(slurm_cores))
+        except ValueError:
+            cores = max(1, cpu_count() - 1)
+    else:
+        cores = max(1, cpu_count() - 1)
+    return max(1, min(n_runs, cores))
+
+
 def run_abc(
     splits_path: Path,
     n_runs: int,
@@ -371,7 +401,7 @@ def run_abc(
         seed=seed
     )
 
-    n_cores = cpu_count() if n_runs >= cpu_count() else n_runs
+    n_cores = pick_num_workers(n_runs)
     logger.info(
         f"Starting jobs on {n_cores} cores. This may take a while..."
     )
