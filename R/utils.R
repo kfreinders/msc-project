@@ -165,7 +165,7 @@ print_mclapply_stats <- function(mc_stats) {
 }
 
 print_run_summary <- function(
-  df_remaining, paramsets_file, ss_filename, output_folder, mc_stats, elapsed_time
+  df_remaining, paramsets_file, output_folder, mc_stats, elapsed_time
 ) {
   print_section("SUMMARY")
 
@@ -245,7 +245,6 @@ print_run_summary <- function(
   }
 
   # Final note
-  cat(sprintf("\nSummary statistics exported to: %s\n", ss_filename))
   cat(sprintf("Full infection tables saved to: %s\n\n", output_folder))
 }
 

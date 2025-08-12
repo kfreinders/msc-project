@@ -119,38 +119,49 @@ validate_parameters <- function(df, param_bounds) {
 #    RESUMING PRODUCTION RUNS                                                  #
 #------------------------------------------------------------------------------#
 
-resume_or_generate_parameters <- function(
+make_fingerprint <- function(nosoi_settings, param_bounds, output_folder) {
+  norm_param_bounds <- normalize_param_bounds(param_bounds)
+  # Combine into a single list so order is preserved
+  obj <- list(
+    nosoi_settings = nosoi_settings,
+    param_bounds   = norm_param_bounds,
+    output_folder  = output_folder
+  )
+  digest(obj, algo = "sha256")  # returns a 64-char hex hash
+}
+
+find_remaining <- function(n_sim, output_folder, paramsets_file) {
+  # Resume simulations by comparing existing Parquet files with the seeds in
+  # `paramsets_file`, if it exists
+  cat(sprintf("Existing master file found at '%s'\n", paramsets_file))
+  df <- fread(paramsets_file)
+
+  existing_files <- list.files(output_folder, pattern = "^inftable_\\d{10}_mapped\\.parquet$")
+  completed_seeds <- as.integer(
+    sub("^inftable_(\\d{10})_mapped\\.parquet$", "\\1", existing_files)
+  )
+  df <- df[!(df$seed %in% completed_seeds), ]
+
+  if (nrow(df) > 0) {
+    cat(sprintf(
+      "Resuming run with %s remaining simulations\n",
+      format(n_sim, big.mark = ",", decimal.mark = ".", scientific = FALSE)
+    ))
+  } else {
+    cat("All simulations already completed. Nothing to do.\n")
+    quit(save = "no")
+  }
+
+  return(df)
+}
+
+generate_parameters <- function(
   n_sim,
   param_bounds,
   output_folder,
   paramsets_file,
   plot_file
 ) {
-  # Resume simulations by comparing existing Parquet files with the seeds in
-  # `paramsets_file`, if it exists
-  if (file.exists(paramsets_file)) {
-    cat(sprintf("Existing master file found at '%s'\n", paramsets_file))
-    df <- fread(paramsets_file)
-
-    existing_files <- list.files(output_folder, pattern = "^inftable_\\d{10}_mapped\\.parquet$")
-    completed_seeds <- as.integer(
-      sub("^inftable_(\\d{10})_mapped\\.parquet$", "\\1", existing_files)
-    )
-    df <- df[!(df$seed %in% completed_seeds), ]
-
-    if (nrow(df) > 0) {
-      cat(sprintf(
-        "Resuming run with %s remaining simulations\n",
-        format(n_sim, big.mark = ",", decimal.mark = ".", scientific = FALSE)
-      ))
-    } else {
-      cat("All simulations already completed. Nothing to do.\n")
-      quit(save = "no")
-    }
-
-    return(df)
-  }
-
   # If `paramsets_file` does not exist, create a new parameter set
   print_section("GENERATING PARAMETER DISTRIBUTIONS")
   # Normalize param_bounds to 2-element vector to handle fixed values
