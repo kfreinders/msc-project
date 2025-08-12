@@ -119,6 +119,17 @@ validate_parameters <- function(df, param_bounds) {
 #    RESUMING PRODUCTION RUNS                                                  #
 #------------------------------------------------------------------------------#
 
+make_fingerprint <- function(nosoi_settings, param_bounds, output_folder) {
+  norm_param_bounds <- normalize_param_bounds(param_bounds)
+  # Combine into a single list so order is preserved
+  obj <- list(
+    nosoi_settings = nosoi_settings,
+    param_bounds   = norm_param_bounds,
+    output_folder  = output_folder
+  )
+  digest(obj, algo = "sha256")  # returns a 64-char hex hash
+}
+
 find_remaining <- function(n_sim, output_folder, paramsets_file) {
   # Resume simulations by comparing existing Parquet files with the seeds in
   # `paramsets_file`, if it exists
@@ -151,7 +162,6 @@ generate_parameters <- function(
   paramsets_file,
   plot_file
 ) {
-
   # If `paramsets_file` does not exist, create a new parameter set
   print_section("GENERATING PARAMETER DISTRIBUTIONS")
   # Normalize param_bounds to 2-element vector to handle fixed values

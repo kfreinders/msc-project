@@ -9,6 +9,7 @@ suppressPackageStartupMessages({
   library(arrow)
   library(data.table)
   library(DBI)
+  library(digest)
   library(dplyr)
   library(ggplot2)
   library(igraph)
@@ -131,6 +132,12 @@ if (file.exists(config$paths$paramsets_file)) {
     config$paths$paramsets_plot_file
   )
 }
+
+fp = make_fingerprint(
+  config$nosoi_settings,
+  config$param_bounds,
+  config$output_folder
+)
 
 #------------------------------------------------------------------------------#
 #    RUN SIMULATIONS IN PARALLEL                                               #
