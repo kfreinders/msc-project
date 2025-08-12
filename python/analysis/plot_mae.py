@@ -24,8 +24,8 @@ Examples
 Run the script directly with CLI arguments:
 
     $ PYTHONPATH=python python3 -m compare_error_distributions.py \
-        --abc data/benchmarks/abc_data.csv \
-        --dnn data/benchmarks/dnn_data.csv \
+        --abc data/benchmarks/abc_data.parquet \
+        --dnn data/benchmarks/dnn_data.parquet \
         --output error_distributions.pdf \
         --show
 
@@ -54,10 +54,11 @@ def load_and_prepare_data(data_abc: Path, data_dnn: Path) -> pd.DataFrame:
     Parameters
     ----------
     data_abc : Path
-        Path to the CSV file containing true and posterior parameter estimates
-        from ABC.
+        Path to the parquet file containing true and posterior parameter
+        estimates from ABC.
     data_dnn : Path
-        Path to the CSV file containing DNN prediction errors per parameter.
+        Path to the parquet file containing DNN prediction errors per
+        parameter.
 
     Returns
     -------
@@ -65,8 +66,8 @@ def load_and_prepare_data(data_abc: Path, data_dnn: Path) -> pd.DataFrame:
         Long-format dataframe with columns: ['Parameter', 'Error', 'Method'].
     """
     # Load the data
-    abc_df = pd.read_csv(data_abc)
-    dnn_errors = pd.read_csv(data_dnn)
+    abc_df = pd.read_parquet(data_abc)
+    dnn_errors = pd.read_parquet(data_dnn)
 
     # Compute raw prediction errors for ABC
     abc_errors = pd.DataFrame({
@@ -189,12 +190,12 @@ def cli_main():
 
     )
     parser.add_argument(
-        "--abc", type=str, default="data/benchmarks/abc_data.csv",
-        help="Path to abc_data.csv"
+        "--abc", type=str, default="data/benchmarks/abc_data.parquet",
+        help="Path to abc_data.parquet"
     )
     parser.add_argument(
-        "--dnn", type=str, default="data/benchmarks/dnn_data.csv",
-        help="Path to dnn_data.csv"
+        "--dnn", type=str, default="data/benchmarks/dnn_data.parquet",
+        help="Path to dnn_data.parquet"
     )
     parser.add_argument(
         "--output", type=str, default="error_distributions.pdf",

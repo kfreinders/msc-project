@@ -75,8 +75,8 @@ def run_predicted_vs_true(
         Path to the directory containing the trained DNN (`regressor.pt`) and
         its hyperparameter configuration (`best_config.json`).
     output_path : Path
-        Directory where results such as error CSVs, MAE values, and plots will
-        be saved.
+        Directory where results such as error parquet, MAE values, and plots
+        will be saved.
     make_plots : bool
         If True, generates and saves histogram plots of the prediction errors
         for each target parameter.
@@ -153,8 +153,10 @@ def run_predicted_vs_true(
         errors = y_pred[:, i] - y_true[:, i]
         df_errors[param] = errors
 
-    df_errors.to_csv(output_path / "dnn_data.csv", index=False)
-    logger.info(f"Saved prediction errors to {output_path / 'dnn_data.csv'}")
+    df_errors.to_parquet(output_path / "dnn_data.parquet", index=False)
+    logger.info(
+        f"Saved prediction errors to {output_path / 'dnn_data.parquet'}"
+    )
 
     if make_plots:
         plot_histogram(y_pred, y_true, test_split.y_colnames, output_path)

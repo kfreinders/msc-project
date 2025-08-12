@@ -324,7 +324,8 @@ def run_abc(
         Proportion of closest simulations to retain for ABC adjustment
         (e.g. 0.01).
     output_path : Path
-        Path to save the resulting CSV file of posterior estimates and plots.
+        Path to save the resulting parquet file of posterior estimates and
+        plots.
     seed : int
         Random seed for reproducibility of sampling.
     make_plots : bool
@@ -390,8 +391,8 @@ def run_abc(
         logger.info(f"Making directory: {output_path}")
         output_path.mkdir(parents=True, exist_ok=True)
 
-    df.to_csv(output_path / "abc_data.csv")
-    logger.info(f"Saved all ABC data to {output_path / 'abc_data.csv'}")
+    df.to_parquet(output_path / "abc_data.parquet")
+    logger.info(f"Saved all ABC data to {output_path / 'abc_data.parquet'}")
 
     logger.info("Computing MAE per parameter...")
     mae = compute_mae(df, param_names).to_dict()
