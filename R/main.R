@@ -13,7 +13,6 @@ suppressPackageStartupMessages({
   library(nosoi)
   library(parallel)
   library(purrr)
-  library(RSQLite)
   library(tidyr)
   library(truncnorm)
   library(viridis)
@@ -23,7 +22,6 @@ suppressPackageStartupMessages({
 source("R/config.R")
 source("R/sample_parameters.R")
 source("R/nosoi_sim.R")
-source("R/sqlite.R")
 source("R/run_nosoi_parallel.R")
 source("R/utils.R")
 
@@ -58,7 +56,7 @@ cat(sprintf(
   num_cores
 ))
 mc_stats <- run_nosoi_parallel(
-  df, db_name, output_folder, num_cores, nosoi_settings
+  df, output_folder, num_cores, nosoi_settings
 )
 
 end_time <- Sys.time()  # End timing
@@ -69,6 +67,6 @@ elapsed_time <- round(difftime(end_time, start_time, units = "secs"), 2)
 #------------------------------------------------------------------------------#
 
 print_run_summary(
-  df, paramsets_file, ss_filename, output_folder, mc_stats, elapsed_time
+  df, paramsets_file, output_folder, mc_stats, elapsed_time
 )
 

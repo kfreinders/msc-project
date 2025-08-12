@@ -13,17 +13,17 @@ def main() -> None:
     # Load and merge data
     logger.info("Reading and merging CSV files...")
     params = pd.read_csv("data/nosoi/master.csv")
-    stats = pd.read_csv("data/nosoi/summary_stats_export.csv")
+    stats = pd.read_csv("data/scarce_stats/scarce_0.00.csv")
     params["seed"] = params["seed"].astype(str)
     stats["seed"] = stats["seed"].astype(str)
-    merged = pd.merge(params, stats[["seed", "SS_11"]], on="seed", how="left")
-    merged["non_trivial"] = (merged["SS_11"] > 1).astype(int)
+    merged = pd.merge(params, stats[["seed", "SST_06"]], on="seed", how="left")
+    merged["non_trivial"] = (merged["SST_06"] > 1).astype(int)
 
     # Prepare features and labels
     logger.info("Preparing feature and label sets...")
     X = merged[[
         "mean_t_incub", "stdv_t_incub", "mean_nContact",
-        "p_trans", "p_fatal", "t_recovery"
+        "p_trans", "p_fatal", "mean_t_recovery"
     ]]
     y = merged["non_trivial"]
 

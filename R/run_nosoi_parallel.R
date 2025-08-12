@@ -19,7 +19,7 @@ print_log<- function(seed, hosts_infected, elapsed_time) {
 #    WORKER FACTORY                                                            #
 #------------------------------------------------------------------------------#
 
-create_worker <- function(db_name, output_folder, nosoi_settings) {
+create_worker <- function(output_folder, nosoi_settings) {
   function(params) {
     tryCatch({
       seed <- params$seed
@@ -61,11 +61,11 @@ create_worker <- function(db_name, output_folder, nosoi_settings) {
 #------------------------------------------------------------------------------#
 
 run_nosoi_parallel <- function(
-  param_df, db_name, output_folder, num_cores, nosoi_settings
+  param_df, output_folder, num_cores, nosoi_settings
 ) {
   # Create worker
   params_list <- split(param_df, seq(nrow(param_df)))
-  worker <- create_worker(db_name, output_folder, nosoi_settings)
+  worker <- create_worker(output_folder, nosoi_settings)
   
   # Run simulations in parallel.
   mc_stats <- mclapply(

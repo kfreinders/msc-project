@@ -17,7 +17,5 @@ param_bounds <- list(
 output_folder         <- "data/nosoi"
 paramsets_file        <- file.path(output_folder, "master.csv")
 paramsets_plot_file   <- file.path(output_folder, "parameter_distributions.pdf")
-db_name               <- file.path(output_folder, "simulation_results.db")
-ss_filename           <- file.path(output_folder, "summary_stats_export.csv")
 parquet_file          <- file.path(output_folder, "nosoi_inftables.parquet")
 
