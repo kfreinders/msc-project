@@ -106,8 +106,34 @@ if (!dir.exists(config$paths$output_folder)) {
   dir.create(config$paths$output_folder, recursive = TRUE, showWarnings = FALSE)
 }
 
-
 if (!is.null(args$seed)) set.seed(args$seed)
+
+#------------------------------------------------------------------------------#
+#    FINGERPRINT CHECK                                                         #
+#------------------------------------------------------------------------------#
+
+current_fp <- make_fingerprint(
+  config$nosoi_settings,
+  config$param_bounds,
+  config$paths$output_folder      # (was config$output_folder; fixed)
+)
+fp_path <- file.path(config$paths$output_folder, ".fingerprint")
+
+if (!file.exists(fp_path)) {
+  writeLines(current_fp, fp_path)
+  cat(sprintf("Initialized fingerprint at '%s'.\n", fp_path))
+} else {
+  old_fp <- readLines(fp_path, warn = FALSE)[1]
+  if (!identical(old_fp, current_fp)) {
+    cat(
+      "Configuration has changed since the last run.\n",
+      sprintf("Please clean %s ", config$paths$output_folder),
+      "or choose a different --out before continuing.\n",
+      sep = ""
+    )
+    quit(save = "no")
+  }
+}
 
 #------------------------------------------------------------------------------#
 #    SAMPLE PARAMETER SPACE                                                    #
