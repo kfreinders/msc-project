@@ -62,9 +62,7 @@ parser$add_argument("--p-fatal", help = "Range e.g. 0.01,0.5")
 parser$add_argument("--mean-t-recovery", help = "Range e.g. 10,30")
 
 # Paths
-parser$add_argument("--out", dest = "output_folder", help = "Output folder (default from defaults.R)")
-parser$add_argument("--paramsets-file", help = "Path to master.csv")
-parser$add_argument("--paramsets-plot-file", help = "Path to parameter_distributions.pdf")
+parser$add_argument("--out", dest = "output_folder", help = "Output folder")
 
 args <- parser$parse_args()
 
@@ -88,14 +86,16 @@ if (!is.null(args$p_trans))         config$param_bounds$p_trans         <- parse
 if (!is.null(args$p_fatal))         config$param_bounds$p_fatal         <- parse_range(args$p_fatal,         "p-fatal")
 if (!is.null(args$mean_t_recovery)) config$param_bounds$mean_t_recovery <- parse_range(args$mean_t_recovery, "mean-t-recovery")
 
-# overrides: paths
-config$paths$output_folder       <- args$output_folder       %||% config$paths$output_folder
-config$paths$paramsets_file      <- args$paramsets_file      %||% config$paths$paramsets_file
-config$paths$paramsets_plot_file <- args$paramsets_plot_file %||% config$paths$paramsets_plot_file
+config$paths$output_folder <- args$output_folder %||% config$paths$output_folder
+
+# Hardcode filenames inside output folder
+config$paths$paramsets_file      <- file.path(config$paths$output_folder, "master.csv")
+config$paths$paramsets_plot_file <- file.path(config$paths$output_folder, "parameter_distributions.pdf")
 
 if (!dir.exists(config$paths$output_folder)) {
   dir.create(config$paths$output_folder, recursive = TRUE, showWarnings = FALSE)
 }
+
 
 if (!is.null(args$seed)) set.seed(args$seed)
 
