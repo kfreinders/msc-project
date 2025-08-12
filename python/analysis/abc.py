@@ -88,7 +88,7 @@ def abc_regression_adjustment(
     sim_stats: np.ndarray,
     sim_params: np.ndarray,
     quantile: float = 0.01,
-) -> np.ndarray:
+) -> tuple[np.ndarray, int]:
     """
     Perform ABC with regression adjustment.
 
@@ -106,8 +106,9 @@ def abc_regression_adjustment(
 
     Returns
     -------
-    np.ndarray
-        Posterior mean estimate after regression adjustment.
+    tuple[np.ndarray, int]
+        Posterior mean estimate after regression adjustment and number of
+        accepted samples
     """
     # Step 1: compute distances
     diffs = sim_stats - obs_stats               # (n, f)
@@ -140,7 +141,7 @@ def abc_regression_adjustment(
     # Step 5: adjustment y_adj = y - (Xc @ coef.T)
     # Predict at 0 equals reg.intercept_, so subtract slope contribution only
     y_adj = y - Xc @ reg.coef_.T
-    return y_adj.mean(axis=0)
+    return y_adj.mean(axis=0), k
 
 
 def run_abc_for_index(
@@ -199,7 +200,7 @@ def run_abc_for_index(
     sim_params_sampled = params_all[candidate_indices]
 
     try:
-        adjusted_mean = abc_regression_adjustment(
+        adjusted_mean, k = abc_regression_adjustment(
             obs_stats=obs_all[i],
             sim_stats=sim_stats_sampled,
             sim_params=sim_params_sampled,
@@ -216,6 +217,7 @@ def run_abc_for_index(
            for n, v in zip(param_names, params_all[i])},
         **{f"post_{n}": v.item() if hasattr(v, "item") else float(v)
            for n, v in zip(param_names, adjusted_mean)},
+        "k": k,
     }
 
 
@@ -394,6 +396,8 @@ def run_abc(
     logger.info("Computing MAE per parameter...")
     mae = compute_mae(df, param_names).to_dict()
     logging.info(mae)
+
+    logging.info(f"Mean accepted samples per run: {df.loc[:, 'k'].mean()}")
 
     with open(output_path / "abc_mae.json", 'w') as handle:
         json.dump(mae, handle)
