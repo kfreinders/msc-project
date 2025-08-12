@@ -5,4 +5,4 @@
 __pycache__
 .mypy_cache/
 logs
-*.parquet
+data/nosoi/*.parquet
