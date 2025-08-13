@@ -8,7 +8,7 @@ normalize_param_bounds <- function(param_bounds) {
   })
 }
 
-generate_parameters <- function(amount, param_bounds) {
+generate_parameter_sets <- function(amount, param_bounds) {
   # Ensure `amount` is a valid positive integer
   if (!is.numeric(amount) || amount <= 0 || amount != as.integer(amount)) {
     stop("Error: `amount` must be a positive integer.")
@@ -166,7 +166,7 @@ generate_parameters <- function(
   print_section("GENERATING PARAMETER DISTRIBUTIONS")
   # Normalize param_bounds to 2-element vector to handle fixed values
   param_bounds <- normalize_param_bounds(param_bounds)
-  df <- generate_parameters(n_sim, param_bounds)
+  df <- generate_parameter_sets(n_sim, param_bounds)
   print_param_bounds(param_bounds)
   validate_parameters(df, param_bounds)
   cat(sprintf(
