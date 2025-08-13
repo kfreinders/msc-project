@@ -46,6 +46,23 @@ def get_seeds(
     return None, None
 
 
+def _skip_reason(
+    host_count: int,
+    min_hosts: float,
+    max_hosts: float,
+    truncate: int
+) -> Optional[str]:
+    """
+    Return a human-readable skip reason string if the file should be skipped,
+    otherwise None. The string includes the correct < or > sign dynamically.
+    """
+    if host_count < min_hosts:
+        return f"({host_count} < {min_hosts})"
+    if host_count > max_hosts and truncate == 0:
+        return f"({host_count} > {max_hosts})"
+    return None
+
+
 def apply_single_level(
     root_dir: Path,
     strategy: DataScarcityStrategy,
@@ -92,31 +109,19 @@ def apply_single_level(
     first_write = True if not headers else False
 
     for file in find_parquet_files(root_dir):
-        sim_seed = extract_seed(file)
-        host_count = peek_host_count(file)
-
-        # Skip already finished simulations
-        if seeds and sim_seed in seeds:
-            logger.info(f"Skipping already finished file: {file.name}")
-            continue
-
-        # Skip simulations with too few hosts
-        if host_count < min_hosts:
-            logger.info(
-                f"Level {level}: "
-                f"skipping {file.name} ({host_count} < {min_hosts})."
-            )
-            continue
-
-        # Skip simulations with too many hosts
-        if host_count > max_hosts and truncate == 0:
-            logger.info(
-                f"Level {level}: "
-                f"skipping {file.name} ({host_count} > {max_hosts})."
-            )
-            continue
-
         try:
+            sim_seed = extract_seed(file)
+            # Skip already finished simulations
+            if seeds and sim_seed in seeds:
+                logger.info(f"Skipping already finished file: {file.name}")
+                continue
+
+            host_count = peek_host_count(file)
+            reason = _skip_reason(host_count, min_hosts, max_hosts, truncate)
+            if reason:
+                logger.info(f"Level {level}: skipping {file.name} - {reason}")
+                continue
+
             sim = NosoiSimulation.from_parquet(file)
 
             # Truncate oversized simulations if requested
@@ -126,7 +131,7 @@ def apply_single_level(
                     f"({host_count} > {max_hosts}), target {truncate}."
                 )
 
-            sim = sim.truncate(truncate)
+                sim = sim.truncate(truncate)
 
             # Create deterministic degradation seed
             deg_seed = deterministic_seed(sim_seed, level)
