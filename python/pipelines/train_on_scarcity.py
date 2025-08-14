@@ -8,7 +8,7 @@ import torch
 
 from torch.utils.data import DataLoader
 
-from dataproc.nosoi_data_manger import NosoiDataProcessor
+from dataproc.nosoi_data_manager import NosoiDataProcessor
 from dataproc.nosoi_split import NosoiSplit
 from models.interfaces import TrainableModel
 from utils.logging_config import setup_logging
