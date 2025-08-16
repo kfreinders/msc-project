@@ -129,7 +129,7 @@ def abc_regression_adjustment(
     delta = d.max()
     if delta == 0:
         # If all selected sims exactly match obs_stats then just average y
-        return y.mean(axis=0)
+        return y.mean(axis=0), k
     weights = 1.0 - (d / delta) ** 2
     weights[weights < 0] = 0.0
     if weights.sum() == 0:
