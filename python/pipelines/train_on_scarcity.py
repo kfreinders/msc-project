@@ -309,8 +309,6 @@ def main_pipeline(
 
     logger.info(f"Generating data splits for {csv_file} ...")
 
-    splits_path = NosoiDataProcessor.prepare_for_scarcity(csv_file, csv_master)
-
     if splits_path.exists():
         logger.info(f"Using existing splits from {splits_path}")
     else:
