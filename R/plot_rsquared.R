@@ -18,9 +18,8 @@ df_long <- df %>%
 p = ggplot(df_long, aes(x = level, y = r2, color = parameter, shape = parameter)) +
   geom_line() +
   geom_point(size = 3) +
-  scale_x_continuous(breaks = seq(0, 0.5, by = 0.05)) +
+  scale_x_continuous(breaks = seq(0, 0.8, by = 0.05)) +
   labs(
-    title = "R² Score per Parameter Across Scarcity Levels",
     x = "Scarcity Level",
     y = expression(R^2 ~ "Score"),
     color = "Parameter",
