@@ -38,13 +38,15 @@ NosoiSplit : Class for loading and managing simulation splits
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
+from enum import Enum
 from functools import partial
 import json
 import logging
 from multiprocessing import cpu_count
 import os
 from pathlib import Path
-from typing import Callable, Dict
+from typing import Callable, Dict, Optional, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -55,6 +57,152 @@ import torch
 
 from utils.logging_config import setup_logging
 from dataproc.nosoi_split import NosoiSplit
+
+
+# Signature for per-index inference
+InferFn = Callable[
+    [np.ndarray, np.ndarray, np.ndarray], tuple[np.ndarray, int]
+]
+
+
+class ABCMethod(str, Enum):
+    rejection = "rejection"
+    regression = "regression"
+
+
+def make_infer(
+    method: ABCMethod,
+    *,
+    quantile: Optional[float] = None,
+    epsilon: Optional[float] = None,
+) -> InferFn:
+    """
+    Build a concrete per-index inference callable for ABC.
+
+    This factory returns a function with the signature:
+        infer(obs_stats, sim_stats, sim_params) -> (posterior_mean, accepted)
+
+    Exactly one of (`quantile`, `epsilon`) must be provided, aligned with
+    `method`.
+
+    Parameters
+    ----------
+    method : {"rejection", "regression"}
+        ABC method to use.
+    quantile : float | None, optional (keyword-only)
+        Distance quantile for regression-adjusted ABC.
+        Must be in (0, 1] when method='regressionj.
+    epsilon : float | None, optional (keyword-only)
+        Absolute distance cutoff for naive rejection ABC.
+        Must be >= 0 when method='rejection'.
+
+    Returns
+    -------
+    InferFn
+        A callable: infer(obs_stats, sim_stats, sim_params) -> (posterior_mean,
+        accepted).
+
+    Raises
+    ------
+    ValueError
+        If an unknown `method` is given, or if the required tolerance
+        (`quantile` or `epsilon`) is missing/invalid for the chosen method.
+    """
+    if method is ABCMethod.regression:
+        if quantile is None or not (0.0 < quantile <= 1.0):
+            raise ValueError(
+                "quantile must be in (0, 1] for method='regression'."
+            )
+        return cast(InferFn, partial(abc_regression, quantile=quantile))
+
+    if method is ABCMethod.rejection:
+        if epsilon is None or epsilon < 0:
+            raise ValueError(
+                "epsilon must be >= 0 for method='naive'/'rejection'."
+            )
+        return cast(InferFn, partial(abc_rejection, epsilon=epsilon))
+
+
+@dataclass
+class ABCWorker:
+    """
+    Run ABC with regression adjustment for a single pseudo-observation index.
+
+    Parameters
+    ----------
+    i : int
+        Index of the pseudo-observation to use.
+    obs_all : np.ndarray
+        Array of all simulated summary statistics.
+    params_all : np.ndarray
+        Array of true simulation parameters.
+    param_names : list[str]
+        Parameter names (used to construct true/post keys).
+    quantile : float
+        Proportion of closest simulations to keep (default 0.01).
+    n_samples : int
+       Number of simulations to draw in each ABC run.
+    seed: int
+        Seed for making runs reproducable.
+
+    Returns
+    -------
+    dict | None
+        Dictionary with results for this observation, or None if no acceptance.
+    """
+    obs_all: np.ndarray
+    params_all: np.ndarray
+    param_names: list[str]
+    infer: InferFn
+    n_samples: int
+    seed: int
+    method: str
+    quantile: float | None
+    epsilon: float | None
+
+    def __call__(self, i: int) -> dict | None:
+        logger = logging.getLogger(__name__)
+
+        rng = np.random.default_rng(self.seed + i)
+        all_indices = np.arange(len(self.obs_all))
+
+        # Exclude the observation itself if present
+        if 0 <= i < len(all_indices):
+            all_indices = np.delete(all_indices, i)
+
+        # Subsample candidates
+        if self.n_samples >= len(all_indices):
+            candidate_indices = all_indices
+        else:
+            candidate_indices = rng.choice(
+                all_indices, size=self.n_samples, replace=False
+            )
+
+        sim_stats_sampled = self.obs_all[candidate_indices]
+        sim_params_sampled = self.params_all[candidate_indices]
+
+        try:
+            post_mean, k = self.infer(
+                self.obs_all[i],
+                sim_stats_sampled,
+                sim_params_sampled,
+            )
+        except Exception as e:
+            logger.warning(f"ABC failed for idx={i}: {e}")
+            return None
+
+        row = {
+            "idx": i,
+            "method": self.method,
+            "quantile": self.quantile,
+            "epsilon": self.epsilon,
+            **{f"true_{n}": (v.item() if hasattr(v, "item") else float(v))
+               for n, v in zip(self.param_names, self.params_all[i])},
+            **{f"post_{n}": (v.item() if hasattr(v, "item") else float(v))
+               for n, v in zip(self.param_names, post_mean)},
+            "k": k,
+        }
+        return row
 
 
 def sample_parameters(
@@ -84,7 +232,7 @@ def sample_parameters(
     return {k: f(rng) for k, f in priors.items()}
 
 
-def abc_regression_adjustment(
+def abc_regression(
     obs_stats: np.ndarray,
     sim_stats: np.ndarray,
     sim_params: np.ndarray,
@@ -152,24 +300,25 @@ def abc_regression_adjustment(
     return y_adj.mean(axis=0), accepted
 
 
-def abc_naive_rejection(
+def abc_rejection(
     obs_stats: np.ndarray,
     sim_stats: np.ndarray,
     sim_params: np.ndarray,
     epsilon: float,
 ) -> tuple[np.ndarray, int]:
     """
-    Naive rejection ABC:
+    Perform naive rejection ABC.
+
     Accept samples whose distance to the observed summary statistics is <=
     epsilon, and return the mean of the accepted parameters.
 
     Parameters
     ----------
-    obs_stats : (f,)
+    obs_stats : np.ndarray
         Observed summary statistics.
-    sim_stats : (n, f)
+    sim_stats : np.ndarray
         Simulated summary statistics.
-    sim_params : (n, p)
+    sim_params : np.ndarray
         True parameters corresponding to sim_stats.
     epsilon : float
         Distance threshold (tolerance). Samples with distance > epsilon are
@@ -177,7 +326,7 @@ def abc_naive_rejection(
 
     Returns
     -------
-    posterior_mean : (p,)
+    posterior_mean : np.ndarray
         Mean of the accepted parameter vectors.
     accepted : int
         Number of accepted samples.
@@ -203,83 +352,6 @@ def abc_naive_rejection(
     posterior_mean = y.mean(axis=0)
     accepted = int(mask.sum())
     return posterior_mean, accepted
-
-
-def run_abc_for_index(
-    i: int,
-    obs_all: np.ndarray,
-    params_all: np.ndarray,
-    param_names: list[str],
-    quantile: float = 0.01,
-    n_samples: int = 1_000,
-    seed: int = 42
-) -> dict | None:
-    """
-    Run ABC with regression adjustment for a single pseudo-observation index.
-
-    Parameters
-    ----------
-    i : int
-        Index of the pseudo-observation to use.
-    obs_all : np.ndarray
-        Array of all simulated summary statistics.
-    params_all : np.ndarray
-        Array of true simulation parameters.
-    param_names : list[str]
-        Parameter names (used to construct true/post keys).
-    quantile : float
-        Proportion of closest simulations to keep (default 0.01).
-    n_samples : int
-       Number of simulations to draw in each ABC run.
-    seed: int
-        Seed for making runs reproducable.
-
-    Returns
-    -------
-    dict | None
-        Dictionary with results for this observation, or None if no acceptance.
-    """
-    # Set up logger
-    logger = logging.getLogger(__name__)
-
-    rng = np.random.default_rng(seed + i)
-    all_indices = np.arange(len(obs_all))
-
-    # Exclude the observation itself if present
-    if i in all_indices:
-        all_indices = np.delete(all_indices, i)
-
-    # Subsample candidates
-    if n_samples >= len(all_indices):
-        candidate_indices = all_indices
-    else:
-        candidate_indices = rng.choice(
-            all_indices, size=n_samples, replace=False
-        )
-
-    sim_stats_sampled = obs_all[candidate_indices]
-    sim_params_sampled = params_all[candidate_indices]
-
-    try:
-        adjusted_mean, k = abc_regression_adjustment(
-            obs_stats=obs_all[i],
-            sim_stats=sim_stats_sampled,
-            sim_params=sim_params_sampled,
-            quantile=quantile,
-        )
-    except Exception as e:
-        logger.warning(f"ABC failed for idx={i}: {e}")
-        return None
-
-    return {
-        "idx": i,
-        "quantile": quantile,
-        **{f"true_{n}": v.item() if hasattr(v, "item") else float(v)
-           for n, v in zip(param_names, params_all[i])},
-        **{f"post_{n}": v.item() if hasattr(v, "item") else float(v)
-           for n, v in zip(param_names, adjusted_mean)},
-        "k": k,
-    }
 
 
 def compute_mae(
@@ -389,7 +461,9 @@ def run_abc(
     splits_path: Path,
     n_runs: int,
     n_samples: int,
-    quantile: float,
+    method: ABCMethod,
+    quantile: float | None,
+    epsilon: float | None,
     output_path: Path,
     seed: int,
     make_plots: bool
@@ -451,14 +525,20 @@ def run_abc(
     logger.info(f"Parameters to infer: {param_names}")
 
     # Use partial to fix all shared arguments
-    abc_task = partial(
-        run_abc_for_index,
+    # Build the per-index infer callable once
+    infer = make_infer(method=method, quantile=quantile, epsilon=epsilon)
+
+    # Create a pickleable worker object for the process pool
+    worker = ABCWorker(
         obs_all=X_all,
         params_all=y_all,
         param_names=param_names,
-        quantile=quantile,
+        infer=infer,
         n_samples=n_samples,
-        seed=seed
+        seed=seed,
+        method=method,
+        quantile=quantile,
+        epsilon=epsilon,
     )
 
     n_cores = pick_num_workers(n_runs)
@@ -467,14 +547,15 @@ def run_abc(
     )
 
     with ProcessPoolExecutor(max_workers=n_cores) as executor:
-        results = list(executor.map(abc_task, indices))
+        results = list(executor.map(worker, indices))
 
     df = pd.DataFrame([r for r in results if r is not None])
 
     if df.empty:
         raise ValueError(
-            "No ABC results available: all samples may have failed. "
-            "Try increasing --quantile."
+            f"No ABC results available: all samples may have failed. "
+            f"Try increasing "
+            f"{'--epsilon.' if method == 'rejection' else '--quantile'}"
         )
 
     if not output_path.exists():
@@ -508,6 +589,14 @@ def cli_main():
     )
 
     parser.add_argument(
+        "--method", type=ABCMethod, choices=list(ABCMethod),
+        default=ABCMethod.regression,
+        help=(
+            "ABC method to use: naive rejection or regression-adjusted "
+            "(Beaumont et al., 2002) "
+        )
+    )
+    parser.add_argument(
         "--splits-path", type=str, default="data/splits/scarce_0.00",
         help="Path to the directory containing pickled NosoiSplit objects."
     )
@@ -519,9 +608,17 @@ def cli_main():
         "--n-samples", type=int, default=1_000,
         help="Number of simulations to draw in each ABC run."
     )
-    parser.add_argument(
-        "--quantile", type=float, default=0.01,
-        help="Proportion of simulations to retain in ABC rejection step."
+    tol_group = parser.add_mutually_exclusive_group(required=False)
+    tol_group.add_argument(
+        "--quantile", type=float, default=argparse.SUPPRESS,
+        help=(
+            "Distance quantile for regression ABC. (default: 0.01; keeps 1%% "
+            "closest observations)."
+        )
+    )
+    tol_group.add_argument(
+        "--epsilon", type=float, default=argparse.SUPPRESS,
+        help="Absolute distance cutoff for naive rejection ABC. (default: 0.5)"
     )
     parser.add_argument(
         "--output-path", type=str, default="data/benchmarks",
@@ -537,14 +634,33 @@ def cli_main():
     )
 
     args = parser.parse_args()
+
+    method: ABCMethod = cast(ABCMethod, args.method)
+    if method is ABCMethod.regression:
+        if hasattr(args, "epsilon"):
+            parser.error("--epsilon is only valid with --method rejection.")
+        quantile = getattr(args, "quantile", 0.01)
+        if not (0.0 < quantile <= 1.0):
+            parser.error("--quantile must be in (0, 1].")
+        epsilon = None
+    elif method is ABCMethod.rejection:
+        if hasattr(args, "quantile"):
+            parser.error("--quantile is only valid with --method regression.")
+        epsilon = getattr(args, "epsilon", 0.5)
+        if epsilon < 0:
+            parser.error("--epsilon must be non-negative.")
+        quantile = None
+
     run_abc(
         splits_path=Path(args.splits_path),
         n_runs=args.n_runs,
         n_samples=args.n_samples,
-        quantile=args.quantile,
+        method=args.method,
+        quantile=quantile,
+        epsilon=epsilon,
         output_path=Path(args.output_path),
         seed=args.seed,
-        make_plots=args.make_plots
+        make_plots=args.make_plots,
     )
 
 
