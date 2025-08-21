@@ -162,9 +162,7 @@ class ABCWorker:
     quantile: float | None
     epsilon: float | None
 
-    def __call__(self, i: int) -> dict | None:
-        logger = logging.getLogger(__name__)
-
+    def __call__(self, i: int) -> Optional[dict]:
         rng = np.random.default_rng(self.seed + i)
         all_indices = np.arange(len(self.obs_all))
 
@@ -189,8 +187,11 @@ class ABCWorker:
                 sim_stats_sampled,
                 sim_params_sampled,
             )
-        except Exception as e:
-            logger.warning(f"ABC failed for idx={i}: {e}")
+        except ValueError as e:
+            raise e
+
+        if post_mean is None or k == 0:
+            # Expected when tolerance is too tight
             return None
 
         row = {
@@ -263,7 +264,7 @@ def abc_regression(
     sim_stats: np.ndarray,
     sim_params: np.ndarray,
     quantile: float = 0.01,
-) -> tuple[np.ndarray, int]:
+) -> tuple[Optional[np.ndarray], int]:
     """
     Perform ABC with regression adjustment.
 
@@ -298,7 +299,7 @@ def abc_regression(
     if eps == 0.0:
         mask = distances == 0.0
         if not np.any(mask):
-            raise ValueError("No samples accepted at this quantile (eps=0).")
+            return None, 0
         y = sim_params[mask]
         accepted = int(mask.sum())
         # With Xc == 0 for all, regression brings no information → mean
@@ -309,7 +310,7 @@ def abc_regression(
     w[distances > eps] = 0.0
     mask = w > 0.0
     if not np.any(mask):
-        raise ValueError("All kernel weights are zero. Increase quantile.")
+        return None, 0
 
     Xc = diffs[mask]                 # (k, f)
     y = sim_params[mask]             # (k, p)
@@ -331,7 +332,7 @@ def abc_rejection(
     sim_stats: np.ndarray,
     sim_params: np.ndarray,
     epsilon: float,
-) -> tuple[np.ndarray, int]:
+) -> tuple[Optional[np.ndarray], int]:
     """
     Perform naive rejection ABC.
 
@@ -372,7 +373,7 @@ def abc_rejection(
     # Accept if within epsilon
     mask = distances <= epsilon
     if not np.any(mask):
-        raise ValueError("No samples accepted. Increase epsilon.")
+        return None, 0
 
     y = sim_params[mask]                     # (k, p)
     posterior_mean = y.mean(axis=0)
