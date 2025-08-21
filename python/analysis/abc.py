@@ -551,7 +551,6 @@ def run_abc(
     )
     logger.info(f"Parameters to infer: {param_names}")
 
-    # Use partial to fix all shared arguments
     # Build the per-index infer callable once
     infer = make_infer(method=method, quantile=quantile, epsilon=epsilon)
 
