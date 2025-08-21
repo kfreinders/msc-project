@@ -37,7 +37,7 @@ NosoiSplit : Class for loading and managing simulation splits
 """
 
 import argparse
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
@@ -46,6 +46,8 @@ import logging
 from multiprocessing import cpu_count
 import os
 from pathlib import Path
+import sys
+import time
 from typing import Callable, Dict, Optional, cast
 
 import matplotlib.pyplot as plt
@@ -203,6 +205,30 @@ class ABCWorker:
             "k": k,
         }
         return row
+
+
+@dataclass
+class StatusLine:
+    total: int
+    is_tty: bool = sys.stderr.isatty()
+    last: float = 0.0
+
+    def print(self, done: int, failed: int, *, force: bool = False) -> None:
+        if not self.is_tty:
+            if force:
+                logging.info("FINISHED %d | FAILED %d | TOTAL %d/%d",
+                             done, failed, done+failed, self.total)
+            return
+        now = time.monotonic()
+        if not force and (now - self.last) < 0.1:
+            return
+        sys.stderr.write(
+            f"\rFINISHED {done:_} | "
+            f"FAILED {failed:_} | "
+            f"TOTAL {done+failed:_}/{self.total:_}"
+        )
+        sys.stderr.flush()
+        self.last = now
 
 
 def sample_parameters(
@@ -546,8 +572,29 @@ def run_abc(
         f"Starting jobs on {n_cores} cores. This may take a while..."
     )
 
-    with ProcessPoolExecutor(max_workers=n_cores) as executor:
-        results = list(executor.map(worker, indices))
+    status = StatusLine(total=len(indices))
+    results: list[dict] = []
+    done = failed = 0
+
+    with ProcessPoolExecutor(max_workers=n_cores) as ex:
+        futures = [ex.submit(worker, i) for i in indices]
+        for fut in as_completed(futures):
+            try:
+                r = fut.result()
+            except Exception:
+                failed += 1
+                status.print(done, failed)
+                continue
+
+            if r is None:
+                failed += 1
+            else:
+                results.append(r)
+                done += 1
+            status.print(done, failed)
+
+    status.print(done, failed, force=True)        # final flush
+    print("", file=sys.stderr)                    # newline after CR line
 
     df = pd.DataFrame([r for r in results if r is not None])
 
