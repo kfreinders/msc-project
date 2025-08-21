@@ -152,6 +152,59 @@ def abc_regression_adjustment(
     return y_adj.mean(axis=0), accepted
 
 
+def abc_naive_rejection(
+    obs_stats: np.ndarray,
+    sim_stats: np.ndarray,
+    sim_params: np.ndarray,
+    epsilon: float,
+) -> tuple[np.ndarray, int]:
+    """
+    Naive rejection ABC:
+    Accept samples whose distance to the observed summary statistics is <=
+    epsilon, and return the mean of the accepted parameters.
+
+    Parameters
+    ----------
+    obs_stats : (f,)
+        Observed summary statistics.
+    sim_stats : (n, f)
+        Simulated summary statistics.
+    sim_params : (n, p)
+        True parameters corresponding to sim_stats.
+    epsilon : float
+        Distance threshold (tolerance). Samples with distance > epsilon are
+        rejected.
+
+    Returns
+    -------
+    posterior_mean : (p,)
+        Mean of the accepted parameter vectors.
+    accepted : int
+        Number of accepted samples.
+
+    Raises
+    ------
+    ValueError
+        If no samples are accepted (e.g., epsilon too small).
+    """
+    if epsilon < 0:
+        raise ValueError("epsilon must be non-negative.")
+
+    # Distances to observed stats
+    diffs = sim_stats - obs_stats            # (n, f)
+    distances = np.linalg.norm(diffs, axis=1)
+
+    # Accept if within epsilon
+    mask = distances <= epsilon
+    if not np.any(mask):
+        raise ValueError("No samples accepted. Increase epsilon.")
+
+    y = sim_params[mask]                     # (k, p)
+    posterior_mean = y.mean(axis=0)
+    accepted = int(mask.sum())
+    return posterior_mean, accepted
+
+
 def run_abc_for_index(
     i: int,
     obs_all: np.ndarray,
