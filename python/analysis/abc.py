@@ -115,25 +115,32 @@ def abc_regression_adjustment(
     diffs = sim_stats - obs_stats               # (n, f)
     distances = np.linalg.norm(diffs, axis=1)   # (n,  )
 
-    k = int(len(distances) * quantile)
-    if k == 0:
-        raise ValueError("No samples accepted")
+    # 2) epsilon as the empirical quantile of distances
+    if not (0.0 < quantile <= 1.0):
+        raise ValueError("quantile must be in (0, 1].")
+    eps = np.quantile(distances, quantile)
 
-    # Step 2: Select k-closest via partial sort
-    idx = np.argpartition(distances, k)[:k]
-    Xc = diffs[idx]                             # centered features (k, f)
-    y = sim_params[idx]                         # parameters (k, p)
-    d = distances[idx]                          # distances (k,)
+    # Degenerate case: only exact matches within epsilon
+    if eps == 0.0:
+        mask = distances == 0.0
+        if not np.any(mask):
+            raise ValueError("No samples accepted at this quantile (eps=0).")
+        y = sim_params[mask]
+        accepted = int(mask.sum())
+        # With Xc == 0 for all, regression brings no information → mean
+        return y.mean(axis=0), accepted
 
-    # Step 3: compute Epanechnikov kernel weights
-    delta = d.max()
-    if delta == 0:
-        # If all selected sims exactly match obs_stats then just average y
-        return y.mean(axis=0), k
-    weights = 1.0 - (d / delta) ** 2
-    weights[weights < 0] = 0.0
-    if weights.sum() == 0:
+    # 3) Epanechnikov kernel weights with bandwidth eps
+    w = 1.0 - (distances / eps) ** 2
+    w[distances > eps] = 0.0
+    mask = w > 0.0
+    if not np.any(mask):
         raise ValueError("All kernel weights are zero. Increase quantile.")
+
+    Xc = diffs[mask]                 # (k, f)
+    y = sim_params[mask]             # (k, p)
+    weights = w[mask]                # (k,)
+    accepted = int(mask.sum())
 
     # Step 4: local-linear regression for each parameter
     reg = LinearRegression()
@@ -142,7 +149,7 @@ def abc_regression_adjustment(
     # Step 5: adjustment y_adj = y - (Xc @ coef.T)
     # Predict at 0 equals reg.intercept_, so subtract slope contribution only
     y_adj = y - Xc @ reg.coef_.T
-    return y_adj.mean(axis=0), k
+    return y_adj.mean(axis=0), accepted
 
 
 def run_abc_for_index(
@@ -378,7 +385,7 @@ def run_abc(
     indices = rng.choice(len(X_all), size=n_runs, replace=False)
 
     logger.info(
-        f"Randomly selecting {n_runs:_} samples"
+        f"Randomly selecting {n_runs:_} observations..."
     )
     if seed:
         logger.info(f"seed={seed}")
