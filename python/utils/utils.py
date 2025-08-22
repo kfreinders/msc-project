@@ -139,7 +139,7 @@ def plot_predictions(
         max_val = max(trues[:, i].max(), preds[:, i].max())
         ax.plot([min_val, max_val], [min_val, max_val], 'k--', lw=1)
 
-        # Label and R² annotation
+        # Label and R-squared annotation
         ax.set_xlabel("True Values", fontsize=14)
         ax.set_ylabel("Predicted Values", fontsize=14)
         ax.set_title(

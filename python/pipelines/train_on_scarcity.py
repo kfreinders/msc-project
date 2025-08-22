@@ -207,7 +207,8 @@ def compute_r2_per_param(
     Returns
     -------
     dict[str, float]
-        A dictionary where keys are parameter names and values are R² scores.
+        A dictionary where keys are parameter names and values are R-squared
+        scores.
     """
     r2_values: dict[str, float] = {}
     preds, trues = predict_nosoi_parameters(
