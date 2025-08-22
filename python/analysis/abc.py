@@ -384,7 +384,7 @@ def abc_rejection(
 def compute_mae(
     df: pd.DataFrame,
     param_names: list[str]
-) -> pd.Series:
+) -> pd.DataFrame:
     """
     Compute the mean absolute error (MAE) between true and posterior estimates.
 
@@ -404,14 +404,26 @@ def compute_mae(
 
     Returns
     -------
-    pd.Series
+    pd.DataFrame
         Series containing the MAE for each parameter, indexed by
         'post_<param>'.
     """
-    post = df[[f"post_{n}" for n in param_names]]
-    true = df[[f"true_{n}" for n in param_names]].values
-    errors = post - true
-    return errors.abs().mean()
+    post_cols = [f"post_{n}" for n in param_names]
+    true_cols = [f"true_{n}" for n in param_names]
+    post = df[post_cols].to_numpy(float)
+    true = df[true_cols].to_numpy(float)
+
+    abs_err = np.abs(post - true)
+    err_df = pd.DataFrame(abs_err, columns=post_cols)
+    mae_mean = err_df.mean()
+    n = err_df.count()
+    mae_sd = err_df.std(ddof=1).where(n >= 2)
+
+    out = pd.DataFrame(
+        {"mae_mean": mae_mean, "mae_sd": mae_sd, "n": n.astype(int)}
+    )
+    out.index.name = "parameter"
+    return out
 
 
 def plot_errors(
@@ -613,13 +625,16 @@ def run_abc(
     logger.info(f"Saved all ABC data to {output_path / 'abc_data.parquet'}")
 
     logger.info("Computing MAE per parameter...")
-    mae = compute_mae(df, param_names).to_dict()
-    logging.info(mae)
+    mae_stats = compute_mae(df, param_names)
 
-    logging.info(f"Mean accepted samples per run: {df.loc[:, 'k'].mean()}")
+    print("\n", mae_stats, "\n", sep="")
+
+    k_mean = df.loc[:, 'k'].mean()
+    logging.info(f"Mean accepted samples per run: {k_mean}")
+    logging.info(f"Coverage: {1 if failed == 0 else done / failed:.0%}")
 
     with open(output_path / "abc_mae.json", 'w') as handle:
-        json.dump(mae, handle)
+        json.dump(mae_stats.to_dict(), handle)
     logger.info(f"Saved MAE values to {output_path / 'abc_mae.json'}")
 
     if make_plots:
